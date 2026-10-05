@@ -169,3 +169,14 @@ pub async fn icon(axum::extract::Path(domain): axum::extract::Path<String>) -> a
         _ => StatusCode::NOT_FOUND.into_response(),
     }
 }
+
+/// GET /api/plans/premium — the Premium page reads its price and storage here.
+/// Price = catalog.json `pass-yearly` (USD 19.99); storage 1 GB as Bitwarden Premium. No Stripe: the id names the AZET plan.
+#[worker::send]
+pub async fn premium_plan() -> Json<Value> {
+    Json(json!({
+        "seat": {"stripePriceId": "azet:pass-yearly", "price": 19.99, "provided": 1},
+        "storage": {"stripePriceId": "azet:storage", "price": 0, "provided": 1},
+        "object": "premiumPlan"
+    }))
+}

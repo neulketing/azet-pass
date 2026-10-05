@@ -144,4 +144,8 @@ edit('libs/vault/src/cipher-view/login-credentials/login-credentials-view.compon
   s.replace('  showPasswordCount: boolean = false;', '  // AZET 변형 축: verification codes are on the free plan\n  readonly totpFree$ = of(true);\n  showPasswordCount: boolean = false;')
    .replace(/import \{([^}]*)\} from "rxjs";/, (m, names) => names.includes(' of') || names.includes('of,') ? m : `import {${names.trimEnd()}, of } from "rxjs";`))
 
+// ...and TOTP leaves the extension's list of Premium benefits
+const prem = 'apps/browser/src/billing/popup/settings/premium-v2.component.html'
+if (fs.existsSync(p(prem))) edit(prem, (s) => s.replace(/\s*<li>\s*\{\{ "premiumSignUpTotp" \| i18n \}\}\s*<\/li>/, ''))
+
 console.log(`rebrand: ${renamed} strings renamed, ${sizes.size} icon sizes, server ${BASE}`)

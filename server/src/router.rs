@@ -37,6 +37,7 @@ pub fn api_router(env: Env) -> Router {
         .route("/api/accounts/password-hint", post(accounts::password_hint))
         .route("/api/accounts/license", post(azet::post_license))
         .route("/icons/{domain}/icon.png", get(azet::icon))
+        .route("/api/plans/premium", get(azet::premium_plan))
         .route("/api/accounts/key-management/user-key-id", post(azet::post_user_key_id))
         .route("/api/tasks", get(accounts::get_tasks))
         .route("/api/accounts/profile", get(accounts::get_profile))

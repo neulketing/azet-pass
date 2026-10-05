@@ -148,6 +148,10 @@ edit('libs/vault/src/cipher-view/login-credentials/login-credentials-view.compon
 const prem = 'apps/browser/src/billing/popup/settings/premium-v2.component.html'
 if (fs.existsSync(p(prem))) edit(prem, (s) => s.replace(/\s*<li>\s*\{\{ "premiumSignUpTotp" \| i18n \}\}\s*<\/li>/, ''))
 
+// Windows cross-build from a Mac: we ship NSIS/portable only, so the Appx tool install (brew msix-packaging) is skipped
+const nb = 'apps/desktop/desktop_native/build.js'
+if (fs.existsSync(p(nb))) edit(nb, (s) => s.replace(/runCommand\("brew", \["install", "iinuwa\/msix-packaging-tap\/msix-packaging", "osslsigncode"\]\);/, '// AZET: no Appx packaging, so the msix/osslsigncode tools are not installed'))
+
 // Purchase path: Bitwarden sends a self-hosted user to its cloud billing; AZET Pass Premium is an AZET licence key sold
 // on azet.io and entered through the same "Upload your license file" dialog (server: POST /api/accounts/license).
 const shp = 'apps/web/src/app/billing/individual/premium/self-hosted-premium.component'

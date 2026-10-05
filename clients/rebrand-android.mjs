@@ -23,6 +23,8 @@ const wm = JSON.parse(fs.readFileSync(path.join(here, 'brand/generated/wordmark.
 edit('data/src/main/kotlin/com/bitwarden/data/datasource/disk/model/EnvironmentUrlDataJson.kt', (s) =>
   s.replace('val DEFAULT_US: EnvironmentUrlDataJson =\n            EnvironmentUrlDataJson(base = "https://vault.bitwarden.com")',
     'val DEFAULT_US: EnvironmentUrlDataJson =\n            EnvironmentUrlDataJson(base = "https://pass.azet.io")'))
+edit('data/src/main/kotlin/com/bitwarden/data/repository/model/Environment.kt', (s) =>
+  s.replace('override val label: String get() = "bitwarden.com"', 'override val label: String get() = "pass.azet.io"'))
 edit('app/build.gradle.kts', (s) => s.replace('applicationId = "com.x8bit.bitwarden"', 'applicationId = "io.azet.pass"'))
 edit('app/src/main/AndroidManifest.xml', (s) => s.replace('android:label="Bitwarden Bridge"', 'android:label="AZET Pass Bridge"'))
 

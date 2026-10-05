@@ -19,3 +19,4 @@ sql/global_domains_seed.sql
 .claude/
 .dev.vars
 wrangler.test.toml
+wrangler.deploy.toml

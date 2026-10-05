@@ -44,8 +44,8 @@ pub async fn config(
         "version": "2026.6.0",
         "gitHash": "5d84f176",
         "server": {
-          "name": "Vaultwarden",
-          "url": "https://github.com/dani-garcia/vaultwarden"
+          "name": "AZET Pass",
+          "url": "https://github.com/neulketing/azet-pass"
         },
         "settings": {
             "disableUserRegistration": disable_user_registration,

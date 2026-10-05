@@ -1,4 +1,5 @@
-name = "warden-worker"
+name = "azet-pass"
+routes = [{ pattern = "pass.azet.io", custom_domain = true }]
 main = "src/entry.js"
 compatibility_date = "2025-09-19"
 keep_vars = true
@@ -33,14 +34,14 @@ command = "cargo install --locked -q worker-build --version 0.8.5 && worker-buil
 name = "LOGIN_RATE_LIMITER"
 # A unique identifier for this rate limiter within your Cloudflare account
 # You can use any positive integer
-namespace_id = "1001"
+namespace_id = "7701"
 # Allow 5 requests per 60 seconds per key (email or IP)
 # This prevents brute force attacks while allowing legitimate login attempts
 simple = { limit = 5, period = 60 }
 
 [[ratelimits]]
 name = "SEND_ACCESS_RATE_LIMITER"
-namespace_id = "1003"
+namespace_id = "7703"
 # Allow 15 password attempts per minute per IP for public Send access.
 simple = { limit = 15, period = 60 }
 
@@ -110,8 +111,8 @@ crons = ["0 3 * * *"]
 
 [[d1_databases]]
 binding = "vault1"
-database_name = "vault1"
-database_id = "${D1_DATABASE_ID}"
+database_name = "azet-pass"
+database_id = "2fddea06-13ea-4f8b-9560-8552ededdcd4"
 migrations_dir = "migrations"
 
 # R2 bucket for file attachments (optional, requires credit card)
@@ -127,6 +128,7 @@ migrations_dir = "migrations"
 # If R2 is not configured, KV will be used for attachments.
 [[kv_namespaces]]
 binding = "ATTACHMENTS_KV"
+id = "79be245f9f094a7781a1d967cc7acd89"
 
 [env.dev]
 name = "warden-worker-dev"

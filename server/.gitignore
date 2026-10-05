@@ -16,5 +16,6 @@ sql/global_domains_seed.sql
 .ace-tool/
 .codex/
 .cursor/
-.claude/.dev.vars
+.claude/
+.dev.vars
 wrangler.test.toml

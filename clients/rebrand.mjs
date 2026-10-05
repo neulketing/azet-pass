@@ -148,4 +148,12 @@ edit('libs/vault/src/cipher-view/login-credentials/login-credentials-view.compon
 const prem = 'apps/browser/src/billing/popup/settings/premium-v2.component.html'
 if (fs.existsSync(p(prem))) edit(prem, (s) => s.replace(/\s*<li>\s*\{\{ "premiumSignUpTotp" \| i18n \}\}\s*<\/li>/, ''))
 
+// Purchase path: Bitwarden sends a self-hosted user to its cloud billing; AZET Pass Premium is an AZET licence key sold
+// on azet.io and entered through the same "Upload your license file" dialog (server: POST /api/accounts/license).
+const shp = 'apps/web/src/app/billing/individual/premium/self-hosted-premium.component'
+if (fs.existsSync(p(shp + '.ts'))) {
+  edit(shp + '.ts', (s) => s.replace(/this\.environmentService\.cloudWebVaultUrl\$\.pipe\(\s*map\(\(url\) => `\$\{url\}\/#\/settings\/subscription\/premium`\),\s*\)/g, 'of("https://azet.io/")'))
+  edit(shp + '.html', (s) => s.replace('href="https://bitwarden.com/pricing/"', 'href="https://azet.io/"'))
+}
+
 console.log(`rebrand: ${renamed} strings renamed, ${sizes.size} icon sizes, server ${BASE}`)

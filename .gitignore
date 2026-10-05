@@ -1,0 +1,6 @@
+work/
+*.dmg
+*.zip
+*.apk
+node_modules/
+.DS_Store

@@ -1,0 +1,150 @@
+// Turns a pinned bitwarden/clients checkout (GPL-3.0) into AZET Pass. Everything else stays byte-identical to upstream.
+// What changes (each line is a PARITY row): R-numbers are in ~/Code/azet-suite/reference/azet-pass/PARITY.md.
+//  - no commercially licensed code: bitwarden_license/ and @bitwarden/commercial-sdk-internal are removed (OSS build)
+//  - default server: the one production region is https://pass.azet.io (our Cloudflare Worker)
+//  - name: "Bitwarden" -> "AZET Pass" in every UI string table (trademark; file-and-sentence rule c)
+//  - logo, shield mark and toolbar/app icons: our key mark in the same slots and pixel sizes (c)
+//  - 변형 축: the item view shows TOTP codes without Premium
+// usage: node rebrand.mjs <clients-checkout>
+import fs from 'node:fs'
+import path from 'node:path'
+import { execFileSync } from 'node:child_process'
+
+const root = path.resolve(process.argv[2])
+const here = path.dirname(new URL(import.meta.url).pathname)
+const p = (...a) => path.join(root, ...a)
+const edit = (file, fn) => {
+  const before = fs.readFileSync(p(file), 'utf8')
+  const after = fn(before)
+  if (after === before) throw new Error(`rebrand: no change in ${file} (upstream moved?)`)
+  fs.writeFileSync(p(file), after)
+}
+const BASE = 'https://pass.azet.io'
+
+// 1. OSS only
+fs.rmSync(p('bitwarden_license'), { recursive: true, force: true })
+fs.writeFileSync(p('package.json'), fs.readFileSync(p('package.json'), 'utf8').replace(/\n\s*"@bitwarden\/commercial-sdk-internal": "[^"]*",/, ''))
+
+// 2. default server
+edit('libs/common/src/platform/services/default-environment.service.ts', (s) =>
+  s.replace(/export const PRODUCTION_REGIONS: RegionConfig\[\] = \[[\s\S]*?\n\];/, `export const PRODUCTION_REGIONS: RegionConfig[] = [
+  {
+    key: Region.US,
+    domain: "pass.azet.io",
+    urls: {
+      base: null,
+      api: "${BASE}/api",
+      identity: "${BASE}/identity",
+      icons: "${BASE}/icons",
+      webVault: "${BASE}",
+      notifications: "${BASE}/notifications",
+      events: "${BASE}/events",
+      scim: null,
+      send: "${BASE}/#/send/",
+    },
+  },
+];`))
+
+// 3. name in every string table (values only; keys, placeholders and URLs untouched)
+const tables = ['apps/browser/src/_locales', 'apps/desktop/src/locales', 'apps/web/src/locales']
+let renamed = 0
+for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
+  for (const lang of fs.readdirSync(dir)) {
+    const f = path.join(dir, lang, 'messages.json')
+    if (!fs.existsSync(f)) continue
+    const j = JSON.parse(fs.readFileSync(f, 'utf8'))
+    // Our server sends no mail, so the two sentences that promise an emailed hint say what happens instead (다름 b).
+    const ko = lang === 'ko'
+    if (j.masterPassHintText) j.masterPassHintText.message = ko ? '비밀번호 힌트는 이메일로 보내지지 않으니 마스터 비밀번호를 따로 적어 두세요. 최대 길이: $CURRENT$/$MAXIMUM$' : 'Password hints are not emailed, so write your master password down somewhere safe. $CURRENT$/$MAXIMUM$ character maximum.'
+    if (j.enterYourAccountEmailAddressAndYourPasswordHintWillBeSentToYou) j.enterYourAccountEmailAddressAndYourPasswordHintWillBeSentToYou.message = ko ? 'AZET Pass는 비밀번호 힌트를 이메일로 보내지 않습니다.' : 'AZET Pass does not email password hints.'
+    for (const v of Object.values(j)) {
+      if (typeof v?.message === 'string' && v.message.includes('Bitwarden')) {
+        v.message = v.message.replaceAll('Bitwarden', 'AZET Pass')
+        // Korean particles: 비트워든 ends in a consonant, 패스 in a vowel
+        if (ko) v.message = v.message.replace(/AZET Pass(은|을|과|으로|이 )/g, (m, x) => 'AZET Pass' + { '은': '는', '을': '를', '과': '와', '으로': '로', '이 ': '가 ' }[x])
+        renamed++
+      }
+    }
+    fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n')
+  }
+}
+for (const m of ['apps/browser/src/manifest.json', 'apps/browser/src/manifest.v3.json']) {
+  edit(m, (s) => s.replaceAll('"Bitwarden Inc."', '"AZET LLC"').replace('"https://bitwarden.com"', '"https://azet.io"').replaceAll('"Bitwarden"', '"AZET Pass"'))
+}
+
+// 4. logo and mark in the same SVG slots (class names kept so theme colours apply as upstream)
+const MARK = 'M13 1a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 5a3 3 0 1 0 0 6a3 3 0 0 0 0-6ZM11 16h4v15h-4ZM15 21h5v3.5h-5ZM15 26.5h4v3.5h-4Z'
+const wordmark = (name, w, h, title) => `import { svg } from "../svg";
+
+export const ${name} = svg\`
+  <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+    <title>${title}</title>
+    <path class="tw-fill-marketing-logo" fill-rule="evenodd" transform="scale(${(h / 32).toFixed(4)})" d="${MARK}"/>
+    <text class="tw-fill-marketing-logo" x="${Math.round(h * 0.95)}" y="${Math.round(h * 0.8)}" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="700" font-size="${Math.round(h * 0.78)}">AZET Pass</text>
+  </svg>
+\`;
+`
+fs.writeFileSync(p('libs/assets/src/svg/svgs/bitwarden-logo.icon.ts'), wordmark('BitwardenLogo', 290, 45, 'AZET Pass'))
+fs.writeFileSync(p('libs/assets/src/svg/svgs/bitwarden-logo-beta.icon.ts'), wordmark('BitwardenLogoBeta', 120, 18, 'AZET Pass Beta'))
+edit('libs/assets/src/svg/svgs/shield.ts', (s) =>
+  s.replace(/<svg[\s\S]*?<\/svg>/, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 32" fill="none">
+    <path class="tw-fill-fg-nav" fill-rule="evenodd" d="${MARK}"/>
+  </svg>`))
+
+// 5. toolbar icons, same file names and sizes as upstream
+const img = p('apps/browser/src/images')
+const tmp = fs.mkdtempSync('/tmp/azp-icons-')
+const sizes = new Set()
+for (const f of fs.readdirSync(img)) {
+  const m = f.match(/^icon(\d+)(_gray|_locked)?(_beta)?\.png$/)
+  if (m) sizes.add(m[1])
+}
+execFileSync(path.join(here, 'brand/make-icons.sh'), [tmp, ...sizes])
+for (const f of fs.readdirSync(img)) {
+  const m = f.match(/^icon(\d+)(_gray|_locked)?(_beta)?\.png$/)
+  if (!m) continue
+  const kind = m[2] === '_gray' ? 'gray' : m[2] === '_locked' ? 'locked' : 'blue'
+  fs.copyFileSync(path.join(tmp, `${kind}-${m[1]}.png`), path.join(img, f))
+}
+
+// 5b. desktop app identity, update feed and icons (same files and sizes as upstream)
+const eb = 'apps/desktop/electron-builder.json'
+if (fs.existsSync(p(eb))) {
+  const j = JSON.parse(fs.readFileSync(p(eb), 'utf8'))
+  j.extraMetadata.name = 'azet-pass'
+  j.productName = 'AZET Pass'
+  j.appId = 'io.azet.pass'
+  j.copyright = 'Copyright © 2015-2026 Bitwarden Inc. and contributors (GPL-3.0); AZET Pass changes © 2026 AZET LLC'
+  j.publish = { provider: 'generic', url: `${BASE}/desktop` } // update feed on our server (Bitwarden: artifacts.bitwarden.com)
+  fs.writeFileSync(p(eb), JSON.stringify(j, null, 2) + '\n')
+  const res = p('apps/desktop/resources')
+  const big = fs.mkdtempSync('/tmp/azp-dicons-')
+  execFileSync(path.join(here, 'brand/make-icons.sh'), [big, '16', '32', '64', '128', '256', '512', '1024'])
+  const set = path.join(big, 'icon.iconset')
+  fs.mkdirSync(set)
+  for (const [n, s] of [['16x16', 16], ['16x16@2x', 32], ['32x32', 32], ['32x32@2x', 64], ['128x128', 128], ['128x128@2x', 256], ['256x256', 256], ['256x256@2x', 512], ['512x512', 512], ['512x512@2x', 1024]])
+    fs.copyFileSync(path.join(big, `blue-${s}.png`), path.join(set, `icon_${n}.png`))
+  for (const f of ['icon.icns', 'dmg.icns', 'icon.beta.icns', 'dmg.beta.icns']) execFileSync('iconutil', ['-c', 'icns', set, '-o', path.join(res, f)])
+  for (const f of ['icon.png', 'icon.beta.png']) fs.copyFileSync(path.join(big, 'blue-1024.png'), path.join(res, f))
+  for (const f of ['icon.ico', 'icon.beta.ico'])
+    execFileSync('magick', [16, 32, 64, 128, 256].map((s) => path.join(big, `blue-${s}.png`)).concat(path.join(res, f)))
+  for (const dir of ['icons', 'icons_beta']) {
+    for (const f of fs.readdirSync(path.join(res, dir))) {
+      const m = f.match(/^(\d+)x\1\.png$/)
+      if (m && fs.existsSync(path.join(big, `blue-${m[1]}.png`))) fs.copyFileSync(path.join(big, `blue-${m[1]}.png`), path.join(res, dir, f))
+    }
+  }
+}
+
+// 6. 변형 축: TOTP code in the item view on the free plan (Bitwarden: Premium only). Server side, every item
+//    already carries organizationUseTotp=true, which opens the copy and autofill gates.
+edit('libs/vault/src/cipher-view/login-credentials/login-credentials-view.component.html', (s) => {
+  const a = s.indexOf('@if (cipher.login.totp) {')
+  const b = s.indexOf('</bit-form-field>', a)
+  return s.slice(0, a) + s.slice(a, b).replace(/\(isPremium\$ \| async\)/g, '(totpFree$ | async)') + s.slice(b)
+})
+edit('libs/vault/src/cipher-view/login-credentials/login-credentials-view.component.ts', (s) =>
+  s.replace('  showPasswordCount: boolean = false;', '  // AZET 변형 축: verification codes are on the free plan\n  readonly totpFree$ = of(true);\n  showPasswordCount: boolean = false;')
+   .replace(/import \{([^}]*)\} from "rxjs";/, (m, names) => names.includes(' of') || names.includes('of,') ? m : `import {${names.trimEnd()}, of } from "rxjs";`))
+
+console.log(`rebrand: ${renamed} strings renamed, ${sizes.size} icon sizes, server ${BASE}`)

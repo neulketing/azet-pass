@@ -144,18 +144,28 @@ mod tests {
     }
 }
 
-/// GET /icons/{domain}/icon.png — website icons for vault items. Bitwarden runs its own icon service;
-/// we send the client to DuckDuckGo's public favicon service instead (the domain is already public, no account data).
+/// GET /icons/{domain}/icon.png — website icons for vault items. Bitwarden runs its own icon service; we fetch the
+/// icon from DuckDuckGo's public favicon service and return it from our own host (clients only allow images from the
+/// configured icons URL). The domain is the only input and is already public; no account data is involved.
 #[worker::send]
 pub async fn icon(axum::extract::Path(domain): axum::extract::Path<String>) -> axum::response::Response {
-    use axum::response::IntoResponse;
-    let ok = !domain.is_empty() && domain.len() <= 253 && domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    use axum::{http::StatusCode, response::IntoResponse};
+    let ok = !domain.is_empty() && domain.len() <= 253 && domain.contains('.') && domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
     if !ok {
-        return axum::http::StatusCode::NOT_FOUND.into_response();
+        return StatusCode::NOT_FOUND.into_response();
     }
-    (
-        axum::http::StatusCode::FOUND,
-        [("location", format!("https://icons.duckduckgo.com/ip3/{domain}.ico")), ("cache-control", "public, max-age=86400".to_string())],
-    )
-        .into_response()
+    let Ok(req) = Request::new(&format!("https://icons.duckduckgo.com/ip3/{domain}.ico"), Method::Get) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match Fetch::Request(req).send().await {
+        Ok(mut r) if r.status_code() == 200 => match r.bytes().await {
+            Ok(b) if !b.is_empty() && b.len() <= 100_000 => (
+                [("content-type", "image/x-icon"), ("cache-control", "public, max-age=604800")],
+                b,
+            )
+                .into_response(),
+            _ => StatusCode::NOT_FOUND.into_response(),
+        },
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }

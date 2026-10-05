@@ -73,18 +73,26 @@ for (const m of ['apps/browser/src/manifest.json', 'apps/browser/src/manifest.v3
 
 // 4. logo and mark in the same SVG slots (class names kept so theme colours apply as upstream)
 const MARK = 'M13 1a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 5a3 3 0 1 0 0 6a3 3 0 0 0 0-6ZM11 16h4v15h-4ZM15 21h5v3.5h-5ZM15 26.5h4v3.5h-4Z'
-const wordmark = (name, w, h, title) => `import { svg } from "../svg";
-
-export const ${name} = svg\`
-  <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
-    <title>${title}</title>
-    <path class="tw-fill-marketing-logo" fill-rule="evenodd" transform="scale(${(h / 32).toFixed(4)})" d="${MARK}"/>
-    <text class="tw-fill-marketing-logo" x="${Math.round(h * 0.95)}" y="${Math.round(h * 0.8)}" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="700" font-size="${Math.round(h * 0.78)}">AZET Pass</text>
-  </svg>
-\`;
-`
-fs.writeFileSync(p('libs/assets/src/svg/svgs/bitwarden-logo.icon.ts'), wordmark('BitwardenLogo', 290, 45, 'AZET Pass'))
-fs.writeFileSync(p('libs/assets/src/svg/svgs/bitwarden-logo-beta.icon.ts'), wordmark('BitwardenLogoBeta', 120, 18, 'AZET Pass Beta'))
+const wm = JSON.parse(fs.readFileSync(path.join(here, 'brand/generated/wordmark.json'), 'utf8')) // "AZET Pass", 34 high
+const pm = JSON.parse(fs.readFileSync(path.join(here, 'brand/generated/wordmark-pm.json'), 'utf8')) // "Password Manager"
+// mark (26x32) at the left, wordmark after it, both scaled to the slot height; classes kept so theme colours apply
+const logo = (cls, w, h, title, sub) => {
+  const k = sub ? h * 0.62 / 34 : h / 34 // wordmark scale
+  const m = (sub ? h * 0.66 : h) / 32 // mark scale
+  const x = 26 * m + h * 0.2
+  let body = `<path class="${cls}" fill-rule="evenodd" transform="scale(${m.toFixed(4)})" d="${MARK}"/>` +
+    `<path class="${cls}" transform="translate(${x.toFixed(2)} 0) scale(${k.toFixed(4)})" d="${wm.path}"/>`
+  if (sub) body += `<path class="${cls}" transform="translate(${x.toFixed(2)} ${(h * 0.6).toFixed(2)}) scale(${(h * 0.36 / 34).toFixed(4)})" d="${pm.path}"/>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" fill="none"><title>${title}</title>${body}</svg>`
+}
+const putSvg = (file, svgText) => edit(file, (s) => s.replace(/<svg[\s\S]*?<\/svg>/, svgText))
+const svgs = 'libs/assets/src/svg/svgs/'
+putSvg(svgs + 'bitwarden-logo.icon.ts', logo('tw-fill-marketing-logo', 290, 45, 'AZET Pass'))
+putSvg(svgs + 'bitwarden-logo-beta.icon.ts', logo('tw-fill-marketing-logo', 120, 18, 'AZET Pass Beta'))
+putSvg(svgs + 'password-manager.ts', logo('tw-fill-fg-nav', 200, 49, 'AZET Pass Password Manager', true))
+putSvg(svgs + 'side-nav-logo.ts', logo('tw-fill-fg-nav', 153, 24, 'AZET Pass'))
+putSvg(svgs + 'side-nav-logo-beta.ts', logo('tw-fill-fg-nav', 154, 24, 'AZET Pass Beta'))
+putSvg(svgs + 'bitwarden-icon.ts', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none"><rect class="tw-fill-bw-blue" width="20" height="20" rx="3"/><path fill="#fff" fill-rule="evenodd" transform="translate(5.1 2) scale(0.5)" d="${MARK}"/></svg>`)
 edit('libs/assets/src/svg/svgs/shield.ts', (s) =>
   s.replace(/<svg[\s\S]*?<\/svg>/, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 32" fill="none">
     <path class="tw-fill-fg-nav" fill-rule="evenodd" d="${MARK}"/>

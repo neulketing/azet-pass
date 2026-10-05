@@ -1,0 +1,52 @@
+# AZET Pass for Android: pinned Bitwarden Android tag (F-Droid flavour: no Google services), rebrand, release APK signed with the AZET Pass key.
+# The Bitwarden SDK comes from GitHub Packages; its POM licence is printed so the build log records which SDK build was used.
+name: android
+on: workflow_dispatch
+permissions:
+  contents: read
+  packages: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Upstream + rebrand
+        run: |
+          . clients/pins.env
+          git clone -q --depth 1 --branch "$ANDROID_TAG" "$ANDROID_REPO" ../a
+          node clients/rebrand-android.mjs ../a
+      - name: SDK licence (POM)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v=$(grep '^bitwardenSdk' ../a/gradle/libs.versions.toml | cut -d'"' -f2)
+          curl -sf -u "x:$GH_TOKEN" "https://maven.pkg.github.com/bitwarden/sdk/com/bitwarden/sdk-android/$v/sdk-android-$v.pom" | tee sdk.pom | grep -i -A3 "<license" || echo "no licence block in POM"
+      - name: Build F-Droid flavour (release)
+        working-directory: ../a
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :app:assembleFdroidRelease --no-daemon -q
+      - name: Sign with the AZET Pass key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KS_B64" | base64 -d > ks.jks
+          in=$(ls ../a/app/build/outputs/apk/fdroid/release/*.apk | head -1)
+          bt=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $bt/zipalign -f 4 "$in" aligned.apk
+          $bt/apksigner sign --ks ks.jks --ks-pass env:KS_PW --ks-key-alias azet-pass --out azet-pass-android.apk aligned.apk
+          $bt/apksigner verify --print-certs azet-pass-android.apk | head -3
+          $bt/aapt2 dump badging azet-pass-android.apk | grep -E "^package|application-label:" | head -2
+          rm ks.jks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azet-pass-android
+          path: |
+            azet-pass-android.apk
+            sdk.pom
+          retention-days: 14

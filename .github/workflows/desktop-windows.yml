@@ -1,0 +1,39 @@
+# AZET Pass for Windows: pinned Bitwarden desktop tag + clients/rebrand.mjs, unsigned x64 NSIS installer and portable dir.
+name: desktop-windows
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Upstream + rebrand
+        run: |
+          . clients/pins.env
+          git clone -q --depth 1 --branch "$DESKTOP_TAG" "$CLIENTS_REPO" ../c
+          node clients/rebrand.mjs ../c
+      - name: Install
+        working-directory: ../c
+        run: npm install --no-audit --no-fund
+      - name: Native module
+        working-directory: ../c/apps/desktop/desktop_native
+        run: node build.js cross-platform release
+      - name: Build and pack (x64, unsigned)
+        working-directory: ../c/apps/desktop
+        run: |
+          npm run build
+          npx electron-builder --win nsis portable --x64 -p never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azet-pass-windows
+          path: |
+            ../c/apps/desktop/dist/*.exe
+            ../c/apps/desktop/dist/*.yml
+          retention-days: 14

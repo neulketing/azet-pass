@@ -8,7 +8,6 @@
 // usage: node rebrand.mjs <clients-checkout>
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 
 const root = path.resolve(process.argv[2])
 const here = path.dirname(new URL(import.meta.url).pathname)
@@ -93,16 +92,12 @@ edit('libs/assets/src/svg/svgs/shield.ts', (s) =>
 
 // 5. toolbar icons, same file names and sizes as upstream
 const img = p('apps/browser/src/images')
-const tmp = fs.mkdtempSync('/tmp/azp-icons-')
+const tmp = path.join(here, 'brand/generated')
 const sizes = new Set()
 for (const f of fs.readdirSync(img)) {
   const m = f.match(/^icon(\d+)(_gray|_locked)?(_beta)?\.png$/)
-  if (m) sizes.add(m[1])
-}
-execFileSync(path.join(here, 'brand/make-icons.sh'), [tmp, ...sizes])
-for (const f of fs.readdirSync(img)) {
-  const m = f.match(/^icon(\d+)(_gray|_locked)?(_beta)?\.png$/)
   if (!m) continue
+  sizes.add(m[1])
   const kind = m[2] === '_gray' ? 'gray' : m[2] === '_locked' ? 'locked' : 'blue'
   fs.copyFileSync(path.join(tmp, `${kind}-${m[1]}.png`), path.join(img, f))
 }
@@ -118,16 +113,10 @@ if (fs.existsSync(p(eb))) {
   j.publish = { provider: 'generic', url: `${BASE}/desktop` } // update feed on our server (Bitwarden: artifacts.bitwarden.com)
   fs.writeFileSync(p(eb), JSON.stringify(j, null, 2) + '\n')
   const res = p('apps/desktop/resources')
-  const big = fs.mkdtempSync('/tmp/azp-dicons-')
-  execFileSync(path.join(here, 'brand/make-icons.sh'), [big, '16', '32', '64', '128', '256', '512', '1024'])
-  const set = path.join(big, 'icon.iconset')
-  fs.mkdirSync(set)
-  for (const [n, s] of [['16x16', 16], ['16x16@2x', 32], ['32x32', 32], ['32x32@2x', 64], ['128x128', 128], ['128x128@2x', 256], ['256x256', 256], ['256x256@2x', 512], ['512x512', 512], ['512x512@2x', 1024]])
-    fs.copyFileSync(path.join(big, `blue-${s}.png`), path.join(set, `icon_${n}.png`))
-  for (const f of ['icon.icns', 'dmg.icns', 'icon.beta.icns', 'dmg.beta.icns']) execFileSync('iconutil', ['-c', 'icns', set, '-o', path.join(res, f)])
+  const big = path.join(here, 'brand/generated') // made by brand/make-icons.sh (+ iconutil, magick); committed so CI needs no Mac tools
+  for (const f of ['icon.icns', 'dmg.icns', 'icon.beta.icns', 'dmg.beta.icns']) fs.copyFileSync(path.join(big, 'icon.icns'), path.join(res, f))
   for (const f of ['icon.png', 'icon.beta.png']) fs.copyFileSync(path.join(big, 'blue-1024.png'), path.join(res, f))
-  for (const f of ['icon.ico', 'icon.beta.ico'])
-    execFileSync('magick', [16, 32, 64, 128, 256].map((s) => path.join(big, `blue-${s}.png`)).concat(path.join(res, f)))
+  for (const f of ['icon.ico', 'icon.beta.ico']) fs.copyFileSync(path.join(big, 'icon.ico'), path.join(res, f))
   for (const dir of ['icons', 'icons_beta']) {
     for (const f of fs.readdirSync(path.join(res, dir))) {
       const m = f.match(/^(\d+)x\1\.png$/)

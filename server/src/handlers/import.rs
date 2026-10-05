@@ -147,7 +147,7 @@ pub async fn import_data(
             created_at: now.clone(),
             updated_at: now.clone(),
             object: "cipher".to_string(),
-            organization_use_totp: false,
+            organization_use_totp: true, // AZET 변형 축: TOTP codes show on the free plan
             edit: true,
             view_password: true,
             collection_ids: None,

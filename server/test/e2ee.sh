@@ -10,7 +10,7 @@ RUN=$RANDOM$RANDOM
 EMAIL="e2ee-$RUN@example.com"
 MASTER="Master-Sentinel-$RUN-pw"
 S_NAME="ItemName-Sentinel-$RUN"; S_USER="user-sentinel-$RUN"; S_PASS="Secret-Sentinel-$RUN!"
-S_NOTE="Note-Sentinel-$RUN"; S_URI="https://sentinel-$RUN.example.org/login"; S_TOTP="JBSWY3DPEHPK3PXP$RUN"
+S_NOTE="Note-Sentinel-$RUN"; S_URI="https://sentinel-$RUN.example.org/login"; S_TOTP="JBSWY3DPEHPK3PXP$(printf %s $RUN | tr 0-9 A-HJK)"
 
 worker-build --release --locked >/dev/null
 printf 'JWT_SECRET=%s\nJWT_REFRESH_SECRET=%s\nALLOWED_EMAILS=*\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .dev.vars
@@ -34,9 +34,13 @@ bw sync >/dev/null
 BACK=$(bw get item "$ID" | jq -r '[.name,.login.username,.login.password,.notes,.login.uris[0].uri,.login.totp]|join("|")')
 WANT="$S_NAME|$S_USER|$S_PASS|$S_NOTE|$S_URI|$S_TOTP"
 [ "$BACK" = "$WANT" ] && echo "client round trip: ok (the client decrypts what it stored)" || { echo "client round trip FAILED: $BACK"; exit 1; }
+# 변형 축: a free account (no AZET licence) is told every item may show TOTP codes (organizationUseTotp), which
+# opens the autofill/copy gates in the clients; the item view gate is patched in clients/ (see clients/patches).
+SYNC_TOTP=$(grep -a -o '"organizationUseTotp":[a-z]*' "$W/wire.log" | sort | uniq -c | tr -s ' '); echo "sync says:$SYNC_TOTP"
+echo "$SYNC_TOTP" | grep -q '"organizationUseTotp":true' && ! echo "$SYNC_TOTP" | grep -q ':false' || { echo "FAIL: free plan not given TOTP"; exit 1; }
 bw logout >/dev/null
 
-DB=$(find .wrangler/state/v3/d1 -name '*.sqlite' | head -1)
+DB=$(find .wrangler/state/v3/d1 -name '*.sqlite' ! -name metadata.sqlite | head -1)
 sqlite3 "$DB" "PRAGMA wal_checkpoint(FULL);" >/dev/null 2>&1 || true
 echo "wire log: $(wc -c <"$W/wire.log") bytes, $(grep -c '^>>> ' "$W/wire.log") requests; D1 file: $DB"
 echo "stored cipher fields start with: $(sqlite3 "$DB" "select substr(json_extract(data,'$.name'),1,2)||' '||substr(json_extract(data,'$.login.password'),1,2) from ciphers limit 1")"

@@ -226,7 +226,7 @@ impl From<CipherDBModel> for Cipher {
             created_at: val.created_at,
             updated_at: val.updated_at,
             object: default_object(),
-            organization_use_totp: false,
+            organization_use_totp: true, // AZET 변형 축: TOTP codes show on the free plan
             edit: true,
             view_password: true,
             collection_ids: None,

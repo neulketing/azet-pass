@@ -105,7 +105,7 @@ pub async fn create_cipher(
         created_at: now.clone(),
         updated_at: now.clone(),
         object: "cipher".to_string(),
-        organization_use_totp: false,
+        organization_use_totp: true, // AZET 변형 축: TOTP codes show on the free plan
         edit: true,
         view_password: true,
         collection_ids: if payload.collection_ids.is_empty() {
@@ -205,7 +205,7 @@ pub async fn update_cipher(
         created_at: existing_cipher.created_at,
         updated_at: now.clone(),
         object: "cipher".to_string(),
-        organization_use_totp: false,
+        organization_use_totp: true, // AZET 변형 축: TOTP codes show on the free plan
         edit: true,
         view_password: true,
         collection_ids: None,
@@ -816,7 +816,7 @@ pub async fn create_cipher_simple(
         created_at: now.clone(),
         updated_at: now.clone(),
         object: "cipher".to_string(),
-        organization_use_totp: false,
+        organization_use_totp: true, // AZET 변형 축: TOTP codes show on the free plan
         edit: true,
         view_password: true,
         collection_ids: None,
@@ -1032,7 +1032,7 @@ fn cipher_json_expr(attachments_enabled: bool) -> String {
             'edit', json('true'),
             'viewPassword', json('true'),
             'permissions', json_object('delete', json('true'), 'restore', json('true')),
-            'organizationUseTotp', json('false'),
+            'organizationUseTotp', json('true'), -- AZET: TOTP codes on the free plan
             'collectionIds', json('[]'),
             'revisionDate', c.updated_at,
             'creationDate', c.created_at,

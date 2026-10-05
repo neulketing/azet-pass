@@ -1,0 +1,56 @@
+# AZET Pass threat model
+
+Scope: the sync server at `https://pass.azet.io` (Cloudflare Worker `azet-pass`, D1 `azet-pass`, KV, Durable Objects; code in `server/`) and the clients that talk to it (Bitwarden GPL-3.0 clients, rebranded). Written 2026-10-06.
+
+## The promise
+
+The server never holds anything that opens a vault. Every item field (name, username, password, notes, URIs, TOTP secret, card and identity fields, attachments, Send contents, folder names) is encrypted on the device before it leaves, with keys the server never receives. Proof: `server/test/e2ee.sh` (local) and `server/test/e2ee-live.sh` (production) store an item through the official `bw` CLI and search every byte on the wire and in D1 for the master password and each field; the count must be 0, and a control (the account email, which the server is meant to see) must be found.
+
+## Keys (unchanged from Bitwarden)
+
+| Key | Made where | What the server gets |
+|---|---|---|
+| Master password | in the person's head | nothing |
+| Master key = PBKDF2-SHA256(master password, email, 600,000) or Argon2id | on the device | nothing |
+| Master password hash = PBKDF2(master key, master password, 1) | on the device | the hash, which the server hashes again with its own salt and PBKDF2 (`password_salt`, `password_iterations`) before storing |
+| User key (64 random bytes: AES-256 + HMAC-SHA256) | on the device | only wrapped by the stretched master key (`users.key`, EncString type 2) |
+| RSA-2048 key pair | on the device | public key in clear, private key wrapped by the user key |
+| Item fields | on the device | EncString type 2 under the user key or a per-item key |
+
+## What the server does see
+
+- Email address (login name and KDF salt), account creation and update times.
+- KDF type and parameters (needed by every client before login).
+- The doubly hashed master password hash.
+- Encrypted keys and encrypted items, their count, size, type (login, card, identity, note, SSH key), folder membership, favourite flag, revision and deletion times. Item type and counts are metadata the server can read.
+- Devices: identifier (random, made by the client), name (e.g. "Chrome", "macOS"), type, refresh token, push token if push is on.
+- `auth_requests.request_ip` for "log in with device" requests (shown to the approving device, as in Bitwarden).
+- The AZET licence key the account entered (`users.azet_license`), its last status and expiry. The key unlocks Premium only; it opens no vault data.
+- Request IP and user agent in Cloudflare's own request logs (not stored in D1).
+- Master password hint, if the person set one, in clear (Bitwarden stores it the same way). It is never returned to anyone: `POST /api/accounts/password-hint` answers the same sentence for every address (upstream warden-worker returned the hint to whoever asked; closed here).
+
+## Attackers and what they get
+
+| Attacker | Gets | Does not get | Mitigation |
+|---|---|---|---|
+| Someone who dumps D1 or KV (Cloudflare insider, stolen API key) | everything in "What the server does see" | any item plaintext | offline guessing of a weak master password: client KDF 600,000 PBKDF2 or Argon2id, then the server's own PBKDF2 on top. The client requires a 12-character minimum (Bitwarden default) |
+| A network attacker | nothing beyond TLS metadata | — | Cloudflare TLS; Bitwarden clients refuse http URLs |
+| Online password guessing | — | — | `LOGIN_RATE_LIMITER` 5 per minute per email or IP; constant-ish delay for unknown accounts (`LOGIN_MISSING_USER_DELAY_MS`) |
+| Account enumeration | whether an address has an account (prelogin returns default KDF for unknown addresses, but register says "already exists") | — | accepted, as in Bitwarden |
+| A malicious or compromised server operator | can change the web vault JavaScript it serves and capture the master password typed into it | — | **the weak point.** The installed clients (browser extension, desktop, Android, iOS) ship their code inside the signed package and do not load code from the server, so a server compromise does not reach them. The web vault served by this Worker is a convenience; the apps are the trusted path. Today `public/web-vault` is empty in production, so no code is served from the server at all |
+| A malicious server sending crafted ciphertext or keys | could try key-substitution (e.g. hand a client a public key it controls during sharing) | — | sharing and organizations are not implemented on this server, so there is no key exchange to subvert |
+| Licence service compromise (suite-api) | could grant or remove Premium | vault data (it never receives any) | the Pass server sends suite-api only the key, the account id and `pass` |
+| Lost master password | — | — | nobody can recover the vault, including AZET. The hint is not emailed (the Worker sends no mail). Stated in the hint answer |
+
+## Out of scope / not built
+
+Organizations and sharing, emergency access, SSO, Key Connector, admin panel, email delivery (verification, hint, new-device notices). These are listed as 다름 in PARITY with their reason.
+
+## How to re-check
+
+```sh
+bash server/test/e2ee.sh        # local Worker + official bw CLI + recording proxy + local D1 search
+bash server/test/e2ee-live.sh   # production: bw CLI against pass.azet.io, remote D1 export search, test account deleted
+bash server/test/premium.sh     # Premium follows the AZET licence (stub licence service)
+(cd server && cargo test --lib) # premium rule: active/trial, expiry, 7-day offline grace
+```

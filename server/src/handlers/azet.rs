@@ -143,3 +143,19 @@ mod tests {
         assert!(!premium_from(Some("active"), None, Some("2026-09-28T00:00:00Z"), now)); // offline past 7 days
     }
 }
+
+/// GET /icons/{domain}/icon.png — website icons for vault items. Bitwarden runs its own icon service;
+/// we send the client to DuckDuckGo's public favicon service instead (the domain is already public, no account data).
+#[worker::send]
+pub async fn icon(axum::extract::Path(domain): axum::extract::Path<String>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let ok = !domain.is_empty() && domain.len() <= 253 && domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    if !ok {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    }
+    (
+        axum::http::StatusCode::FOUND,
+        [("location", format!("https://icons.duckduckgo.com/ip3/{domain}.ico")), ("cache-control", "public, max-age=86400".to_string())],
+    )
+        .into_response()
+}

@@ -23,6 +23,17 @@ const wm = JSON.parse(fs.readFileSync(path.join(here, 'brand/generated/wordmark.
 edit('data/src/main/kotlin/com/bitwarden/data/datasource/disk/model/EnvironmentUrlDataJson.kt', (s) =>
   s.replace('val DEFAULT_US: EnvironmentUrlDataJson =\n            EnvironmentUrlDataJson(base = "https://vault.bitwarden.com")',
     'val DEFAULT_US: EnvironmentUrlDataJson =\n            EnvironmentUrlDataJson(base = "https://pass.azet.io")'))
+// the US region's service URLs are hard-coded constants (they ignore DEFAULT_US.base); all point at our Worker
+edit('data/src/main/kotlin/com/bitwarden/data/repository/util/EnvironmentExtensions.kt', (s) => s
+  .replace('DEFAULT_US_API_URL: String = "https://api.bitwarden.com"', 'DEFAULT_US_API_URL: String = "https://pass.azet.io/api"')
+  .replace('DEFAULT_US_EVENTS_URL: String = "https://events.bitwarden.com"', 'DEFAULT_US_EVENTS_URL: String = "https://pass.azet.io/events"')
+  .replace('DEFAULT_US_IDENTITY_URL: String = "https://identity.bitwarden.com"', 'DEFAULT_US_IDENTITY_URL: String = "https://pass.azet.io/identity"')
+  .replace('DEFAULT_US_WEB_VAULT_URL: String = "https://vault.bitwarden.com"', 'DEFAULT_US_WEB_VAULT_URL: String = "https://pass.azet.io"')
+  .replace('DEFAULT_US_WEB_SEND_URL: String = "https://send.bitwarden.com/#"', 'DEFAULT_US_WEB_SEND_URL: String = "https://pass.azet.io/#/send/"')
+  .replace('DEFAULT_US_ICON_URL: String = "https://icons.bitwarden.net"', 'DEFAULT_US_ICON_URL: String = "https://pass.azet.io/icons"'))
+// our privacy policy and terms (help pages stay on bitwarden.com: they describe this same software)
+for (const f of ['app/src/main/kotlin/com/x8bit/bitwarden/ui/auth/feature/startregistration/StartRegistrationScreen.kt', 'app/src/main/kotlin/com/x8bit/bitwarden/ui/platform/feature/settings/about/AboutScreen.kt'])
+  edit(f, (s) => s.replaceAll('"https://bitwarden.com/privacy/"', '"https://azet.io/privacy"').replaceAll('"https://bitwarden.com/privacy"', '"https://azet.io/privacy"').replaceAll('"https://bitwarden.com/terms/"', '"https://azet.io/terms"'))
 edit('data/src/main/kotlin/com/bitwarden/data/repository/model/Environment.kt', (s) =>
   s.replace('override val label: String get() = "bitwarden.com"', 'override val label: String get() = "pass.azet.io"'))
 edit('app/build.gradle.kts', (s) => s.replace('applicationId = "com.x8bit.bitwarden"', 'applicationId = "io.azet.pass"'))

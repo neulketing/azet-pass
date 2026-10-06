@@ -70,6 +70,14 @@ for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
 for (const m of ['apps/browser/src/manifest.json', 'apps/browser/src/manifest.v3.json']) {
   edit(m, (s) => s.replace('"id": "{446900e4-71c2-419f-a6a7-df9c091e268b}"', '"id": "pass@azet.io"').replaceAll('"Bitwarden Inc."', '"AZET LLC"').replace('"https://bitwarden.com"', '"https://azet.io"').replaceAll('"Bitwarden"', '"AZET Pass"'))
 }
+// Firefox built-in data consent (required for new add-ons since 2025-11-03; the key needs Firefox 140). What reaches
+// pass.azet.io: the encrypted vault (logins, cards, identities), the account email, the sites saved in logins and the
+// icon requests for them; client name, version and device type ride on every request (that type can only be optional).
+edit('apps/browser/src/manifest.json', (s) => s.replace('"strict_min_version": "91.0"\n', `"strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["authenticationInfo", "personallyIdentifyingInfo", "financialAndPaymentInfo", "browsingActivity"],
+        "optional": ["technicalAndInteraction"]
+      }\n`))
 
 // 4. logo and mark in the same SVG slots (class names kept so theme colours apply as upstream)
 const MARK = 'M13 1a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 5a3 3 0 1 0 0 6a3 3 0 0 0 0-6ZM11 16h4v15h-4ZM15 21h5v3.5h-5ZM15 26.5h4v3.5h-4Z'

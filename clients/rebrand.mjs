@@ -186,4 +186,36 @@ swap('apps/desktop/src/main/menu/menu.help.ts', LEGAL)
 swap('libs/auth/src/angular/login/login.component.html', [[/\n\s*<div class="tw-text-center">\{\{ "or" \| i18n \}\}<\/div>[\s\S]*?\{\{ "useSingleSignOn" \| i18n \}\}\s*<\/button>/, '']])
 swap('apps/web/src/index.html', [['<title page-title>Bitwarden Web vault</title>', '<title page-title>AZET Pass Web vault</title>']])
 
+// 7. Theme: AZET family tokens (azet-suite design/dist, DESIGN-SPEC U10) on top of Bitwarden's colour variables, so every
+//    component keeps its upstream layout. Brand blue -> AZET violet (solid #6a4ae6 / dark #9a82ff), greys -> AZET ink and
+//    rules, dark surfaces -> ground #0c111d / card #161b26; buttons become pills. Korean keeps words whole.
+const AZ_THEME = `
+/* AZET Pass theme (rebrand.mjs section 7) */
+:root {
+  --color-brand-050: #f4f1ff; --color-brand-100: #ebe6ff; --color-brand-200: #d9d0ff; --color-brand-300: #bfb0ff;
+  --color-brand-400: #9a82ff; --color-brand-500: #8467f5; --color-brand-600: #7456ef; --color-brand-700: #6a4ae6;
+  --color-brand-700-rgb: 106, 74, 230; --color-brand-800: #5b3bd6; --color-brand-800-rgb: 91, 59, 214;
+  --color-brand-900: #4a2fb0; --color-brand-950: #2a2350; --color-brand-950-rgb: 42, 35, 80;
+  --color-gray-050: #f9fafb; --color-gray-100: #f2f4f7; --color-gray-200: #eaecf0; --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3; --color-gray-500: #667085; --color-gray-600: #475467; --color-gray-700: #344054;
+  --color-gray-800: #1d2939; --color-gray-900: #101828; --color-gray-950: #0c111d;
+  --color-primary-100: 244 241 255; --color-primary-300: 191 176 255; --color-primary-600: 106 74 230; --color-primary-700: 91 59 214;
+  --color-background-alt: 249 250 251; --color-background-alt2: 106 74 230; --color-background-alt3: 74 47 176; --color-background-alt4: 42 35 80;
+  --color-text-main: 16 24 40; --color-text-muted: 102 112 133;
+  --color-illustration-outline: 42 35 80; --color-illustration-bg-primary: 235 230 255; --color-illustration-bg-secondary: 217 208 255;
+  --color-illustration-logo: 106 74 230; --color-marketing-logo: 106 74 230;
+}
+.theme_dark {
+  --color-primary-100: 42 35 80; --color-primary-300: 91 59 214; --color-primary-600: 154 130 255; --color-primary-700: 173 153 255;
+  --color-background: 22 27 38; --color-background-alt: 12 17 29; --color-background-alt2: 31 36 47; --color-background-alt3: 51 55 65; --color-background-alt4: 12 17 29;
+  --color-text-main: 245 245 246; --color-text-muted: 148 150 156;
+  --color-bg-primary: #161b26; --color-bg-secondary: #0c111d; --color-bg-tertiary: #0c111d; --color-bg-quaternary: #1f242f; --color-bg-inactive: #0c111d;
+  --color-bg-brand-strong: #ad99ff;
+  --color-illustration-outline: 154 130 255; --color-illustration-bg-primary: 42 35 80; --color-illustration-bg-secondary: 74 47 176;
+}
+html:lang(ko) body { word-break: keep-all; overflow-wrap: anywhere; }
+`
+edit('libs/components/src/tw-theme.css', (s) => s + AZ_THEME)
+edit('libs/components/src/button/button.component.ts', (s) => s.replace('classes.push("tw-rounded-xl");', 'classes.push("tw-rounded-full"); // AZET: pill buttons'))
+
 console.log(`rebrand: ${renamed} strings renamed, ${sizes.size} icon sizes, server ${BASE}`)

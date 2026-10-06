@@ -319,11 +319,6 @@ pub async fn register(
     Ok(Json(json!({})))
 }
 
-#[worker::send]
-pub async fn send_verification_email() -> Result<Json<String>, AppError> {
-    Ok(Json("fixed-token-to-mock".to_string()))
-}
-
 /// POST /api/accounts/password-hint
 ///
 /// Bitwarden normally sends the master password hint via email. This project does not implement

@@ -8,6 +8,7 @@
  */
 
 import RustWorker from "../build/index.js";
+import { signupGate } from "./signup.js";
 
 function base64UrlDecode(str) {
   let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
@@ -137,6 +138,10 @@ export default {
       const stub = env.NOTIFY_DO.get(id);
       return stub.fetch(request);
     }
+
+    // AZET: sign-up needs an emailed token (send / clicked answered here; register only checked here).
+    const gated = await signupGate(request, env, url, ctx);
+    if (gated) return gated;
 
     // Optional: route selected CPU-heavy endpoints to Durable Objects.
     // This keeps the main Worker on a low-CPU path while allowing heavy work to complete.

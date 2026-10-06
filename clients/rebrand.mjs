@@ -167,4 +167,13 @@ if (fs.existsSync(p(shp + '.ts'))) {
   edit(shp + '.html', (s) => s.replace('href="https://bitwarden.com/pricing/"', 'href="https://azet.io/"'))
 }
 
+// Sign-up and sign-in on our server: consent links are our terms and privacy policy; the passkey and SSO buttons go,
+// because the server has neither (a click ended in a 404 and an "unexpected error" toast).
+const swap = (file, pairs) => fs.existsSync(p(file)) && edit(file, (s) => pairs.reduce((t, [a, b]) => t.replace(a, b), s))
+const LEGAL = [['"https://bitwarden.com/terms/"', '"https://azet.io/terms"'], ['"https://bitwarden.com/privacy/"', '"https://azet.io/privacy#pass"']]
+swap('libs/auth/src/angular/registration/registration-start/registration-start.component.html', LEGAL)
+swap('apps/desktop/src/main/menu/menu.help.ts', LEGAL)
+swap('libs/auth/src/angular/login/login.component.html', [[/\n\s*<div class="tw-text-center">\{\{ "or" \| i18n \}\}<\/div>[\s\S]*?\{\{ "useSingleSignOn" \| i18n \}\}\s*<\/button>/, '']])
+swap('apps/web/src/index.html', [['<title page-title>Bitwarden Web vault</title>', '<title page-title>AZET Pass Web vault</title>']])
+
 console.log(`rebrand: ${renamed} strings renamed, ${sizes.size} icon sizes, server ${BASE}`)

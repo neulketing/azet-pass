@@ -2,6 +2,8 @@
 // Everything secret is derived and encrypted here; the request carries only hashes, encrypted keys and a public key.
 // usage: node test/register.mjs <base-url> <email> <master-password>
 import { webcrypto as c } from 'node:crypto'
+import fs from 'node:fs'
+import { makeSignupToken } from '../src/signup.js'
 const [base, email, password] = process.argv.slice(2)
 const enc = new TextEncoder()
 const b64 = (u) => Buffer.from(u).toString('base64')
@@ -34,10 +36,14 @@ const rsa = await c.subtle.generateKey({ name: 'RSA-OAEP', modulusLength: 2048, 
 const publicKey = b64(new Uint8Array(await c.subtle.exportKey('spki', rsa.publicKey)))
 const encryptedPrivateKey = await encString(userKey.slice(0, 32), userKey.slice(32), new Uint8Array(await c.subtle.exportKey('pkcs8', rsa.privateKey)))
 
+// The emailed sign-up token, minted with the server's JWT_SECRET (env, or the local .dev.vars the test scripts write).
+const secret = process.env.JWT_SECRET || fs.readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8').match(/^JWT_SECRET=(.*)$/m)[1]
+const emailVerificationToken = await makeSignupToken(secret, email)
+
 const res = await fetch(`${base}/identity/accounts/register`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ email, name: null, masterPasswordHash, masterPasswordHint: null, key, kdf: 0, kdfIterations: ITER, userAsymmetricKeys: { publicKey, encryptedPrivateKey } }),
+  body: JSON.stringify({ email, name: null, masterPasswordHash, masterPasswordHint: null, key, kdf: 0, kdfIterations: ITER, userAsymmetricKeys: { publicKey, encryptedPrivateKey }, emailVerificationToken }),
 })
 console.error('register', res.status, (await res.text()).slice(0, 200))
 if (!res.ok) process.exit(1)

@@ -1,5 +1,7 @@
 # AZET Pass
 
+Source code of the AZET Pass apps (GPL-3.0) and of its sync server (MIT). How to rebuild each published app: [clients/SOURCE.md](clients/SOURCE.md).
+
 Password manager and authenticator codes for Mac, Windows, Android, iPhone and browsers, with sync on Cloudflare.
 
 Licence route: the clients are Bitwarden's own GPL-3.0 clients, rebranded and pointed at our server, published under GPL-3.0; the server is our Cloudflare Worker (warden-worker, MIT) with end-to-end encryption. Money comes from Premium, unlocked by an AZET licence key (suite-api product `pass`), not from selling the client code.

@@ -68,7 +68,7 @@ for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
   }
 }
 for (const m of ['apps/browser/src/manifest.json', 'apps/browser/src/manifest.v3.json']) {
-  edit(m, (s) => s.replaceAll('"Bitwarden Inc."', '"AZET LLC"').replace('"https://bitwarden.com"', '"https://azet.io"').replaceAll('"Bitwarden"', '"AZET Pass"'))
+  edit(m, (s) => s.replace('"id": "{446900e4-71c2-419f-a6a7-df9c091e268b}"', '"id": "pass@azet.io"').replaceAll('"Bitwarden Inc."', '"AZET LLC"').replace('"https://bitwarden.com"', '"https://azet.io"').replaceAll('"Bitwarden"', '"AZET Pass"'))
 }
 
 // 4. logo and mark in the same SVG slots (class names kept so theme colours apply as upstream)
@@ -151,6 +151,13 @@ if (fs.existsSync(p(prem))) edit(prem, (s) => s.replace(/\s*<li>\s*\{\{ "premium
 // Windows cross-build from a Mac: we ship NSIS/portable only, so the Appx tool install (brew msix-packaging) is skipped
 const nb = 'apps/desktop/desktop_native/build.js'
 if (fs.existsSync(p(nb))) edit(nb, (s) => s.replace(/runCommand\("brew", \["install", "iinuwa\/msix-packaging-tap\/msix-packaging", "osslsigncode"\]\);/, '// AZET: no Appx packaging, so the msix/osslsigncode tools are not installed'))
+
+// GPL-3.0 source offer where the reference shows its copyright line
+const SRC = 'https://github.com/neulketing/azet-pass'
+const about = 'apps/browser/src/tools/popup/settings/about-dialog/about-dialog.component.html'
+if (fs.existsSync(p(about))) edit(about, (s) => s.replace('<p>&copy; Bitwarden Inc. 2015-{{ year }}</p>', `<p>&copy; Bitwarden Inc. 2015-{{ year }}, AZET LLC. GPL-3.0, source: <a href="${SRC}" target="_blank" rel="noreferrer">github.com/neulketing/azet-pass</a></p>`))
+const foot = 'apps/web/src/app/layouts/frontend-layout.component.html'
+if (fs.existsSync(p(foot))) edit(foot, (s) => s.replace('<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc.</div>', `<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc., AZET LLC. GPL-3.0, <a href="${SRC}" target="_blank" rel="noreferrer">source</a></div>`))
 
 // Purchase path: Bitwarden sends a self-hosted user to its cloud billing; AZET Pass Premium is an AZET licence key sold
 // on azet.io and entered through the same "Upload your license file" dialog (server: POST /api/accounts/license).

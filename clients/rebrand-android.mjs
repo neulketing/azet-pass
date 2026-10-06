@@ -31,6 +31,22 @@ edit('data/src/main/kotlin/com/bitwarden/data/repository/util/EnvironmentExtensi
   .replace('DEFAULT_US_WEB_VAULT_URL: String = "https://vault.bitwarden.com"', 'DEFAULT_US_WEB_VAULT_URL: String = "https://pass.azet.io"')
   .replace('DEFAULT_US_WEB_SEND_URL: String = "https://send.bitwarden.com/#"', 'DEFAULT_US_WEB_SEND_URL: String = "https://pass.azet.io/#/send/"')
   .replace('DEFAULT_US_ICON_URL: String = "https://icons.bitwarden.net"', 'DEFAULT_US_ICON_URL: String = "https://pass.azet.io/icons"'))
+// one ABI and compressed native code: our SDK build is arm64-v8a only (Note20 and nearly every phone since 2017), and a
+// compressed, stripped .so keeps the APK under the 25 MiB file limit of azet.io's static hosting (Bitwarden: 4 ABIs, ~90-130 MB)
+edit('app/build.gradle.kts', (s) => s.replace(`    packaging {
+        resources {`, `    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+        dex {
+            useLegacyPackaging = true
+        }
+        resources {`).replace(/(\n        versionName = libs\.versions\.appVersionName\.get\(\)\n)/, '$1        ndk { abiFilters += listOf("arm64-v8a") }\n'))
+// our own version line: upstream 2026.9.1 + AZET build 1 (versionCode grows with each AZET release)
+edit('gradle/libs.versions.toml', (s) => s.replace(/appVersionCode = "\d+"/, 'appVersionCode = "20260901"').replace(/appVersionName = "[^"]+"/, 'appVersionName = "2026.9.1-azet1"'))
+// GPL-3.0 source offer on the About screen's copyright line
+edit('app/src/main/kotlin/com/x8bit/bitwarden/ui/platform/feature/settings/about/AboutViewModel.kt', (s) =>
+  s.replace('copyrightInfo = "© Bitwarden Inc. 2015-${Year.now(clock).value}".asText(),', 'copyrightInfo = "© Bitwarden Inc. 2015-${Year.now(clock).value}, AZET LLC. GPL-3.0, source: github.com/neulketing/azet-pass".asText(),'))
 // our privacy policy and terms (help pages stay on bitwarden.com: they describe this same software)
 for (const f of ['app/src/main/kotlin/com/x8bit/bitwarden/ui/auth/feature/startregistration/StartRegistrationScreen.kt', 'app/src/main/kotlin/com/x8bit/bitwarden/ui/platform/feature/settings/about/AboutScreen.kt'])
   edit(f, (s) => s.replaceAll('"https://bitwarden.com/privacy/"', '"https://azet.io/privacy"').replaceAll('"https://bitwarden.com/privacy"', '"https://azet.io/privacy"').replaceAll('"https://bitwarden.com/terms/"', '"https://azet.io/terms"'))

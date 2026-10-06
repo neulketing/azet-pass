@@ -156,8 +156,9 @@ if (fs.existsSync(p(nb))) edit(nb, (s) => s.replace(/runCommand\("brew", \["inst
 const SRC = 'https://github.com/neulketing/azet-pass'
 const about = 'apps/browser/src/tools/popup/settings/about-dialog/about-dialog.component.html'
 if (fs.existsSync(p(about))) edit(about, (s) => s.replace('<p>&copy; Bitwarden Inc. 2015-{{ year }}</p>', `<p>&copy; Bitwarden Inc. 2015-{{ year }}, AZET LLC. GPL-3.0, source: <a href="${SRC}" target="_blank" rel="noreferrer">github.com/neulketing/azet-pass</a></p>`))
-const foot = 'apps/web/src/app/layouts/frontend-layout.component.html'
-if (fs.existsSync(p(foot))) edit(foot, (s) => s.replace('<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc.</div>', `<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc., AZET LLC. GPL-3.0, <a href="${SRC}" target="_blank" rel="noreferrer">source</a></div>`))
+// frontend-layout is the web shell; anon-layout draws the footer of the login and sign-up screens (web and extension)
+for (const foot of ['apps/web/src/app/layouts/frontend-layout.component.html', 'libs/components/src/anon-layout/anon-layout.component.html'])
+  if (fs.existsSync(p(foot))) edit(foot, (s) => s.replace('<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc.</div>', `<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc., AZET LLC. GPL-3.0, <a href="${SRC}" target="_blank" rel="noreferrer">source</a></div>`))
 
 // Purchase path: Bitwarden sends a self-hosted user to its cloud billing; AZET Pass Premium is an AZET licence key sold
 // on azet.io and entered through the same "Upload your license file" dialog (server: POST /api/accounts/license).
@@ -171,7 +172,8 @@ if (fs.existsSync(p(shp + '.ts'))) {
 // because the server has neither (a click ended in a 404 and an "unexpected error" toast).
 const swap = (file, pairs) => fs.existsSync(p(file)) && edit(file, (s) => pairs.reduce((t, [a, b]) => t.replace(a, b), s))
 const LEGAL = [['"https://bitwarden.com/terms/"', '"https://azet.io/terms"'], ['"https://bitwarden.com/privacy/"', '"https://azet.io/privacy#pass"']]
-swap('libs/auth/src/angular/registration/registration-start/registration-start.component.html', LEGAL)
+// ...and the marketing-mail opt-in goes too: we send no newsletter (its unsubscribe link was bitwarden.com/email-preferences)
+swap('libs/auth/src/angular/registration/registration-start/registration-start.component.html', [...LEGAL, ['<bit-form-control *ngIf="!isSelfHost">', '<bit-form-control *ngIf="false">']])
 swap('apps/desktop/src/main/menu/menu.help.ts', LEGAL)
 swap('libs/auth/src/angular/login/login.component.html', [[/\n\s*<div class="tw-text-center">\{\{ "or" \| i18n \}\}<\/div>[\s\S]*?\{\{ "useSingleSignOn" \| i18n \}\}\s*<\/button>/, '']])
 swap('apps/web/src/index.html', [['<title page-title>Bitwarden Web vault</title>', '<title page-title>AZET Pass Web vault</title>']])

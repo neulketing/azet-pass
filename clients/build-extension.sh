@@ -8,7 +8,9 @@ W=${1:-$here/../../azet-pass-work}; mkdir -p "$W/dist"; src="$W/clients-browser"
 git -C "$src" checkout -q -- . && git -C "$src" clean -qfd   # start from the pristine tag every time
 node "$here/rebrand.mjs" "$src"
 (cd "$src" && npm install --no-audit --no-fund --ignore-scripts)
-v=${BROWSER_TAG#browser-v}
+# AZET revision on top of the upstream tag (stores need a higher version for every upload)
+v=${EXT_VERSION:-${BROWSER_TAG#browser-v}}
+sed -i '' -E "s/\"version\": \"[0-9.]+\"/\"version\": \"$v\"/" "$src/apps/browser/src/manifest.json" "$src/apps/browser/src/manifest.v3.json"
 for b in chrome edge firefox; do
   (cd "$src/apps/browser" && rm -rf build && NODE_ENV=production npm run "build:$b")
   (cd "$src/apps/browser/build" && rm -f ./*.map ./*/*.map && zip -qr "$W/dist/azet-pass-$b-$v.zip" .)

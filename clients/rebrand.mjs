@@ -47,6 +47,7 @@ edit('libs/common/src/platform/services/default-environment.service.ts', (s) =>
 // 3. name in every string table (values only; keys, placeholders and URLs untouched)
 const tables = ['apps/browser/src/_locales', 'apps/desktop/src/locales', 'apps/web/src/locales']
 let renamed = 0
+const KO_EXTRA = JSON.parse(fs.readFileSync(path.join(here, 'brand/ko-extra.json'), 'utf8'))
 for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
   for (const lang of fs.readdirSync(dir)) {
     const f = path.join(dir, lang, 'messages.json')
@@ -56,6 +57,12 @@ for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
     const ko = lang === 'ko'
     if (j.masterPassHintText) j.masterPassHintText.message = ko ? '비밀번호 힌트는 이메일로 보내지지 않으니 마스터 비밀번호를 따로 적어 두세요. 최대 길이: $CURRENT$/$MAXIMUM$' : 'Password hints are not emailed, so write your master password down somewhere safe. $CURRENT$/$MAXIMUM$ character maximum.'
     if (j.enterYourAccountEmailAddressAndYourPasswordHintWillBeSentToYou) j.enterYourAccountEmailAddressAndYourPasswordHintWillBeSentToYou.message = ko ? 'AZET Pass는 비밀번호 힌트를 이메일로 보내지 않습니다.' : 'AZET Pass does not email password hints.'
+    // Upstream ko leaves sign-in, sign-up and empty-vault lines in English: fill only those still equal to English
+    if (ko) {
+      const en = JSON.parse(fs.readFileSync(path.join(dir, 'en', 'messages.json'), 'utf8')) // 'en' is read before 'ko'
+      for (const [k, v] of Object.entries(KO_EXTRA))
+        if (j[k] && en[k] && j[k].message.replaceAll('Bitwarden', 'AZET Pass') === en[k].message) j[k].message = v
+    }
     for (const v of Object.values(j)) {
       if (typeof v?.message === 'string' && v.message.includes('Bitwarden')) {
         v.message = v.message.replaceAll('Bitwarden', 'AZET Pass')
@@ -184,7 +191,9 @@ const LEGAL = [['"https://bitwarden.com/terms/"', '"https://azet.io/terms"'], ['
 swap('libs/auth/src/angular/registration/registration-start/registration-start.component.html', [...LEGAL, ['<bit-form-control *ngIf="!isSelfHost">', '<bit-form-control *ngIf="false">']])
 swap('apps/desktop/src/main/menu/menu.help.ts', LEGAL)
 swap('libs/auth/src/angular/login/login.component.html', [[/\n\s*<div class="tw-text-center">\{\{ "or" \| i18n \}\}<\/div>[\s\S]*?\{\{ "useSingleSignOn" \| i18n \}\}\s*<\/button>/, '']])
-swap('apps/web/src/index.html', [['<title page-title>Bitwarden Web vault</title>', '<title page-title>AZET Pass Web vault</title>']])
+swap('apps/web/src/index.html', [['<title page-title>Bitwarden Web vault</title>', '<title page-title>AZET Pass Web vault</title>'],
+  // browser bar = the page's top area (anon layout background-alt), not Bitwarden blue
+  ['<meta name="theme-color" content="#175DDC" />', '<meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)" />\n    <meta name="theme-color" content="#0c111d" media="(prefers-color-scheme: dark)" />']])
 
 // 7. Theme: AZET family tokens (azet-suite design/dist, DESIGN-SPEC U10) on top of Bitwarden's colour variables, so every
 //    component keeps its upstream layout. Brand blue -> AZET violet (solid #6a4ae6 / dark #9a82ff), greys -> AZET ink and

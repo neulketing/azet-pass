@@ -1,0 +1,14 @@
+// azet-pass-gw — pass.azet.io 공개 프런트(오너 09-22 프런트/백엔드 분리 표준). 데이터 바인딩·외부 키 금지:
+// D1·KV·DO·메일·JWT 비밀값은 비공개 백엔드 azet-pass(../wrangler.toml·wrangler.deploy.toml)에만 있고, 여기서는 서비스 바인딩으로만 닿는다.
+// 웹 금고 정적 자산 = ../public/web-vault. 비밀값: INTERNAL_KEY = 볼트 AZET_PASS_INTERNAL_KEY. 배포: npx wrangler deploy -c gw/wrangler.jsonc
+{
+  "name": "azet-pass-gw",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "assets": { "directory": "../public/web-vault", "not_found_handling": "404-page", "html_handling": "auto-trailing-slash", "run_worker_first": ["/api/*", "/identity/*", "/notifications/*", "/icons/*"] },
+  "routes": [{ "pattern": "pass.azet.io", "custom_domain": true }],
+  "services": [{ "binding": "BACKEND", "service": "azet-pass" }]
+}

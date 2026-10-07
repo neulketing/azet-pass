@@ -1,6 +1,7 @@
+# 비공개 백엔드(2026-10-07 분리): pass.azet.io·웹 금고 정적 자산은 공개 프런트 azet-pass-gw(gw/)가 받는다. INTERNAL_KEY = 볼트 AZET_PASS_INTERNAL_KEY.
+# 여기에 routes·[assets] 를 다시 넣지 않는다(비대화 deploy 가 도메인을 되가져와 D1·KV 가 다시 공개된다). 배포 = 백엔드 deploy 뒤 npx wrangler deploy -c gw/wrangler.jsonc
 name = "azet-pass"
-routes = [{ pattern = "pass.azet.io", custom_domain = true }]
-main = "src/entry.js"
+main = "src/private.js"
 compatibility_date = "2025-09-19"
 keep_vars = true
 workers_dev = false
@@ -47,12 +48,6 @@ simple = { limit = 15, period = 60 }
 
 # Static assets configuration for serving frontend
 # Frontend files (bw_web_builds) are expected under ./public/web-vault before deployment
-[assets]
-directory = "./public/web-vault"
-not_found_handling = "404-page"
-html_handling = "auto-trailing-slash"
-# Only invoke Worker for API and Identity routes, serve static files directly for other routes
-run_worker_first = ["/api/*", "/identity/*", "/notifications/*", "/icons/*"]
 
 [vars]
 # AZET: open sign-up, as Bitwarden cloud (the login screen then shows "New to AZET Pass? Create account").

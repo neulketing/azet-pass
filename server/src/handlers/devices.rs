@@ -228,3 +228,24 @@ pub async fn post_clear_device_token(
 ) -> Result<Json<Value>, AppError> {
     clear_device_token(env, claims, device_id).await
 }
+
+#[worker::send]
+pub async fn deactivate(
+    State(env): State<Arc<Env>>,
+    claims: Claims,
+    Path(id): Path<String>,
+) -> Result<axum::http::StatusCode, AppError> {
+    let db = db::get_db(&env)?;
+    let device = Device::find_by_identifier_and_user(&db, &id, &claims.sub)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Device not found".into()))?;
+    if let Some(cfg) = push::push_config(&env)? {
+        push::unregister_push_device(&cfg, device.push_uuid.as_deref()).await?;
+    }
+    db.prepare("DELETE FROM devices WHERE identifier = ?1 AND user_id = ?2")
+        .bind(&[id.into(), claims.sub.into()])?
+        .run()
+        .await
+        .map_err(|_| AppError::Database)?;
+    Ok(axum::http::StatusCode::OK)
+}

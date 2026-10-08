@@ -1,6 +1,7 @@
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
+    response::IntoResponse,
     Json,
 };
 use glob_match::glob_match;
@@ -319,16 +320,12 @@ pub async fn register(
     Ok(Json(json!({})))
 }
 
-/// POST /api/accounts/password-hint
-///
-/// Bitwarden normally sends the master password hint via email. This project does not implement
-/// email delivery, so we return the hint directly.
 #[worker::send]
 pub async fn password_hint(
     State(env): State<Arc<Env>>,
     headers: HeaderMap,
     Json(payload): Json<PasswordHintRequest>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<axum::response::Response, AppError> {
     enforce_ip_rate_limit(
         &env,
         &headers,
@@ -338,32 +335,25 @@ pub async fn password_hint(
     )
     .await?;
 
-    const NO_HINT: &str = "Password hints are not sent on this server. If you cannot remember your master password, the vault cannot be opened by anyone, including us.";
-
     let db = db::get_db(&env)?;
-    let email = payload.email.to_lowercase();
-
-    let hint: Option<String> = db
+    let email = payload.email.trim().to_lowercase();
+    let found: Option<Value> = db
         .prepare("SELECT master_password_hint FROM users WHERE email = ?1")
-        .bind(&[email.into()])?
-        .first(Some("master_password_hint"))
+        .bind(&[email.clone().into()])?
+        .first(None)
         .await
         .map_err(|_| AppError::Database)?;
-
-    let hint = hint.and_then(|h| {
-        let trimmed = h.trim();
-        if trimmed.is_empty() {
-            None
+    if let Some(row) = found {
+        let hint = row["master_password_hint"].as_str().unwrap_or("").trim();
+        let message = if hint.is_empty() {
+            "No master password hint has been set.\n\n마스터 비밀번호 힌트가 설정되지 않았습니다."
+                .to_string()
         } else {
-            Some(trimmed.to_string())
-        }
-    });
-
-    // AZET: the hint is never returned to whoever asks for an email address (that disclosed it to anyone).
-    // Bitwarden emails it; this server sends no mail (b: no free outbound mail on Workers).
-    let _ = hint;
-
-    Err(AppError::BadRequest(NO_HINT.to_string()))
+            format!("Your master password hint: {hint}\n\n마스터 비밀번호 힌트: {hint}")
+        };
+        return mail_response(&email, "AZET Pass password hint", &message);
+    }
+    Ok(axum::http::StatusCode::OK.into_response())
 }
 
 #[worker::send]
@@ -418,7 +408,10 @@ pub async fn get_profile(
         .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
     let two_factor_enabled = two_factor_enabled(&db, &user_id).await?;
-    let profile = { let premium = crate::handlers::azet::premium_for(&env, &user.id).await; Profile::from_user(user, two_factor_enabled, premium)? };
+    let profile = {
+        let premium = crate::handlers::azet::premium_for(&env, &user.id).await;
+        Profile::from_user(user, two_factor_enabled, premium)?
+    };
 
     Ok(Json(profile))
 }
@@ -465,7 +458,10 @@ pub async fn post_profile(
     .map_err(|_| AppError::Database)?;
 
     let two_factor_enabled = two_factor_enabled(&db, user_id).await?;
-    let profile = { let premium = crate::handlers::azet::premium_for(&env, &user.id).await; Profile::from_user(user, two_factor_enabled, premium)? };
+    let profile = {
+        let premium = crate::handlers::azet::premium_for(&env, &user.id).await;
+        Profile::from_user(user, two_factor_enabled, premium)?
+    };
 
     notifications::publish_user_update(
         (*env).clone(),
@@ -532,7 +528,10 @@ pub async fn put_avatar(
     .map_err(|_| AppError::Database)?;
 
     let two_factor_enabled = two_factor_enabled(&db, user_id).await?;
-    let profile = { let premium = crate::handlers::azet::premium_for(&env, &user.id).await; Profile::from_user(user, two_factor_enabled, premium)? };
+    let profile = {
+        let premium = crate::handlers::azet::premium_for(&env, &user.id).await;
+        Profile::from_user(user, two_factor_enabled, premium)?
+    };
 
     notifications::publish_user_update(
         (*env).clone(),
@@ -1102,4 +1101,320 @@ pub async fn post_sstamp(
     notifications::publish_user_logout((*env).clone(), claims.sub, now, None);
 
     Ok(Json(json!({})))
+}
+
+fn mail_response(
+    to: &str,
+    subject: &str,
+    text: &str,
+) -> Result<axum::response::Response, AppError> {
+    use base64::Engine;
+    let content = format!("{text}\n\nAZET Pass, AZET LLC");
+    let value = base64::engine::general_purpose::STANDARD
+        .encode(json!({"to":to,"subject":subject,"text":content}).to_string());
+    let mut response = StatusCode::OK.into_response();
+    response.headers_mut().insert(
+        "x-azet-mail",
+        value.parse().map_err(|_| AppError::Internal)?,
+    );
+    Ok(response)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasswordCheck {
+    master_password_hash: String,
+}
+
+async fn checked_user(db: &crate::db::Db, id: &str, hash: &str) -> Result<User, AppError> {
+    let row: Value = db
+        .prepare("SELECT * FROM users WHERE id = ?1")
+        .bind(&[id.into()])?
+        .first(None)
+        .await
+        .map_err(|_| AppError::Database)?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+    let user: User = serde_json::from_value(row).map_err(|_| AppError::Internal)?;
+    if !user.verify_master_password(hash).await?.is_valid() {
+        return Err(AppError::BadRequest("Invalid password.".into()));
+    }
+    Ok(user)
+}
+
+#[worker::send]
+pub async fn verify_password(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+    Json(payload): Json<PasswordCheck>,
+) -> Result<Json<Value>, AppError> {
+    checked_user(
+        &db::get_db(&env)?,
+        &claims.sub,
+        &payload.master_password_hash,
+    )
+    .await?;
+    Ok(Json(json!({"object":"masterPasswordPolicy"})))
+}
+
+#[worker::send]
+pub async fn subscription(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+) -> Result<Json<Value>, AppError> {
+    let db = db::get_db(&env)?;
+    let row: Value = db
+        .prepare("SELECT azet_expires_at FROM users WHERE id = ?1")
+        .bind(&[claims.sub.clone().into()])?
+        .first(None)
+        .await
+        .map_err(|_| AppError::Database)?
+        .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+    let premium = crate::handlers::azet::premium_for(&env, &claims.sub).await;
+    Ok(Json(
+        json!({"object":"subscription","storageName":null,"storageGb":0.0,
+        "maxStorageGb":if premium {Some(1)} else {None},"subscription":null,"upcomingInvoice":null,
+        "customerDiscount":null,"license":null,"expiration":row["azet_expires_at"],"usingInAppPurchase":false}),
+    ))
+}
+
+// HMAC-SHA256, implemented using the existing sha2 crate to avoid additional dependencies.
+fn email_code(secret: &str, id: &str, email: &str, window: i64) -> String {
+    use sha2::{Digest, Sha256};
+    let mut key = [0u8; 64];
+    let secret_bytes = secret.as_bytes();
+    if secret_bytes.len() > 64 {
+        key[..32].copy_from_slice(&Sha256::digest(secret_bytes));
+    } else {
+        key[..secret_bytes.len()].copy_from_slice(secret_bytes);
+    }
+    let mut inner = [0x36u8; 64];
+    let mut outer = [0x5cu8; 64];
+    for i in 0..64 {
+        inner[i] ^= key[i];
+        outer[i] ^= key[i];
+    }
+    let payload = format!("pass-email.{id}.{}.{}", email.to_lowercase(), window);
+    let first = Sha256::new()
+        .chain_update(inner)
+        .chain_update(payload)
+        .finalize();
+    let digest = Sha256::new()
+        .chain_update(outer)
+        .chain_update(first)
+        .finalize();
+    format!(
+        "{:06}",
+        u32::from_be_bytes(digest[..4].try_into().unwrap()) % 1_000_000
+    )
+}
+fn valid_email_code(secret: &str, id: &str, email: &str, code: &str, now: i64) -> bool {
+    use constant_time_eq::constant_time_eq;
+    let window = now.div_euclid(900);
+    [window, window - 1].iter().any(|w| {
+        constant_time_eq(
+            email_code(secret, id, email, *w).as_bytes(),
+            code.as_bytes(),
+        )
+    })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailTokenRequest {
+    new_email: String,
+    master_password_hash: String,
+}
+
+#[worker::send]
+pub async fn email_token(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+    headers: HeaderMap,
+    Json(payload): Json<EmailTokenRequest>,
+) -> Result<axum::response::Response, AppError> {
+    enforce_ip_rate_limit(
+        &env,
+        &headers,
+        "LOGIN_RATE_LIMITER",
+        "email-token",
+        "Too many requests",
+    )
+    .await?;
+    let db = db::get_db(&env)?;
+    let new_email = payload.new_email.trim().to_lowercase();
+    if !new_email.contains('@') || new_email.len() > 254 {
+        return Err(AppError::BadRequest("Invalid email.".into()));
+    }
+    checked_user(&db, &claims.sub, &payload.master_password_hash).await?;
+    if User::find_by_email(&db, &new_email).await?.is_some() {
+        return Err(AppError::BadRequest("Email already taken.".into()));
+    }
+    let secret = env.secret("JWT_SECRET")?.to_string();
+    let code = email_code(
+        &secret,
+        &claims.sub,
+        &new_email,
+        chrono::Utc::now().timestamp().div_euclid(900),
+    );
+    mail_response(&new_email, "AZET Pass email verification", &format!("Your verification code is {code}. It expires in 15 minutes.\n\n이메일 인증 코드는 {code}입니다. 15분 동안 유효합니다."))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeEmailData {
+    new_email: String,
+    master_password_hash: String,
+    new_master_password_hash: String,
+    token: String,
+    key: String,
+    master_password_hint: Option<String>,
+    kdf: Option<i32>,
+    kdf_iterations: Option<i32>,
+    kdf_memory: Option<i32>,
+    kdf_parallelism: Option<i32>,
+}
+
+#[worker::send]
+pub async fn change_email(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+    Json(payload): Json<ChangeEmailData>,
+) -> Result<Json<Value>, AppError> {
+    let db = db::get_db(&env)?;
+    let email = payload.new_email.trim().to_lowercase();
+    let user = checked_user(&db, &claims.sub, &payload.master_password_hash).await?;
+    if !valid_email_code(
+        &env.secret("JWT_SECRET")?.to_string(),
+        &claims.sub,
+        &email,
+        &payload.token,
+        chrono::Utc::now().timestamp(),
+    ) {
+        return Err(AppError::BadRequest(
+            "Invalid email verification code.".into(),
+        ));
+    }
+    if User::find_by_email(&db, &email).await?.is_some() {
+        return Err(AppError::BadRequest("Email already taken.".into()));
+    }
+    let kdf = payload.kdf.unwrap_or(user.kdf_type);
+    let iterations = payload.kdf_iterations.unwrap_or(user.kdf_iterations);
+    let memory = payload.kdf_memory.or(user.kdf_memory);
+    let parallelism = payload.kdf_parallelism.or(user.kdf_parallelism);
+    ensure_supported_kdf(kdf, iterations, memory, parallelism)?;
+    let salt = generate_salt()?;
+    let password_iterations = server_password_iterations(&env) as i32;
+    let hash = hash_password_for_storage(
+        &payload.new_master_password_hash,
+        &salt,
+        password_iterations as u32,
+    )
+    .await?;
+    let stamp = Uuid::new_v4().to_string();
+    let now = db::now_string();
+    d1_query!(&db,"UPDATE users SET email = ?1, master_password_hash = ?2, password_salt = ?3, password_iterations = ?4, key = ?5, master_password_hint = ?6, kdf_type = ?7, kdf_iterations = ?8, kdf_memory = ?9, kdf_parallelism = ?10, security_stamp = ?11, updated_at = ?12 WHERE id = ?13",
+        email,hash,salt,password_iterations,payload.key,payload.master_password_hint,kdf,iterations,memory,parallelism,stamp,now,&claims.sub)
+        .map_err(|_| AppError::Database)?.run().await.map_err(|_| AppError::Database)?;
+    Device::delete_all_by_user(&db, &claims.sub).await?;
+    notifications::publish_user_logout((*env).clone(), claims.sub, now, None);
+    Ok(Json(json!({})))
+}
+
+async fn api_key_impl(
+    claims: Claims,
+    env: Arc<Env>,
+    payload: PasswordCheck,
+    rotate: bool,
+) -> Result<Json<Value>, AppError> {
+    let db = db::get_db(&env)?;
+    checked_user(&db, &claims.sub, &payload.master_password_hash).await?;
+    let existing: Option<String> = db
+        .prepare("SELECT api_key FROM users WHERE id = ?1")
+        .bind(&[claims.sub.clone().into()])?
+        .first(Some("api_key"))
+        .await
+        .map_err(|_| AppError::Database)?;
+    let key = if !rotate {
+        existing.filter(|s| !s.is_empty())
+    } else {
+        None
+    };
+    let key = match key {
+        Some(v) => v,
+        None => {
+            const ALPHABET: &[u8] =
+                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            let mut bytes = [0u8; 30];
+            getrandom::fill(&mut bytes).map_err(|_| AppError::Internal)?;
+            let value: String = bytes
+                .iter()
+                .map(|n| ALPHABET[(*n as usize) % ALPHABET.len()] as char)
+                .collect();
+            db.prepare("UPDATE users SET api_key = ?1 WHERE id = ?2")
+                .bind(&[value.clone().into(), claims.sub.clone().into()])?
+                .run()
+                .await
+                .map_err(|_| AppError::Database)?;
+            value
+        }
+    };
+    let date: Option<String> = db
+        .prepare("SELECT updated_at FROM users WHERE id = ?1")
+        .bind(&[claims.sub.into()])?
+        .first(Some("updated_at"))
+        .await
+        .map_err(|_| AppError::Database)?;
+    Ok(Json(
+        json!({"apiKey":key,"revisionDate":date,"object":"apiKey"}),
+    ))
+}
+#[worker::send]
+pub async fn api_key(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+    Json(payload): Json<PasswordCheck>,
+) -> Result<Json<Value>, AppError> {
+    api_key_impl(claims, env, payload, false).await
+}
+#[worker::send]
+pub async fn rotate_api_key(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+    Json(payload): Json<PasswordCheck>,
+) -> Result<Json<Value>, AppError> {
+    api_key_impl(claims, env, payload, true).await
+}
+
+#[cfg(test)]
+mod email_code_tests {
+    use super::*;
+    #[test]
+    fn accepts_current_and_previous_windows_only() {
+        let secret = "test-secret";
+        let id = "user-id";
+        let email = "EXAMPLE@EMAIL.COM";
+        let now = 2_000_000;
+        let window = now / 900;
+        assert!(valid_email_code(
+            secret,
+            id,
+            email,
+            &email_code(secret, id, email, window),
+            now
+        ));
+        assert!(valid_email_code(
+            secret,
+            id,
+            email,
+            &email_code(secret, id, email, window - 1),
+            now
+        ));
+        assert!(!valid_email_code(
+            secret,
+            id,
+            email,
+            &email_code(secret, id, email, window - 2),
+            now
+        ));
+    }
 }

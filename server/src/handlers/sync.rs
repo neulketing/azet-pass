@@ -85,7 +85,10 @@ pub async fn get_sync_data(
     let force_row_query = ciphers_default_row_query(env.as_ref());
 
     // Serialize profile and folders (small data, acceptable CPU cost)
-    let mut profile = { let premium = crate::handlers::azet::premium_for(&env, &user.id).await; Profile::from_user(user, two_factor_enabled, premium)? };
+    let mut profile = {
+        let premium = crate::handlers::azet::premium_for(&env, &user.id).await;
+        Profile::from_user(user, two_factor_enabled, premium)?
+    };
     // Match vaultwarden semantics: `_status` is `Invited` when no master password is set.
     // We don't implement org invitations, but this helps clients interpret the account state.
     profile.status = if has_master_password { 0 } else { 1 };

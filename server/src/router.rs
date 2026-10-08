@@ -6,8 +6,8 @@ use std::sync::Arc;
 use worker::Env;
 
 use crate::handlers::{
-    accounts, attachments, auth_requests, ciphers, config, devices, domains, emergency_access,
-    folders, identity, import, meta, sends, sync, twofactor, webauth, azet,
+    accounts, attachments, auth_requests, azet, ciphers, config, devices, domains,
+    emergency_access, folders, identity, import, meta, sends, sync, twofactor, webauth,
 };
 
 pub fn api_router(env: Env) -> Router {
@@ -31,10 +31,25 @@ pub fn api_router(env: Env) -> Router {
         // For on-demand sync checks
         .route("/api/accounts/revision-date", get(accounts::revision_date))
         .route("/api/accounts/password-hint", post(accounts::password_hint))
+        .route("/api/accounts/subscription", get(accounts::subscription))
+        .route(
+            "/api/accounts/verify-password",
+            post(accounts::verify_password),
+        )
+        .route("/api/accounts/email-token", post(accounts::email_token))
+        .route("/api/accounts/email", post(accounts::change_email))
+        .route("/api/accounts/api-key", post(accounts::api_key))
+        .route(
+            "/api/accounts/rotate-api-key",
+            post(accounts::rotate_api_key),
+        )
         .route("/api/accounts/license", post(azet::post_license))
         .route("/icons/{domain}/icon.png", get(azet::icon))
         .route("/api/plans/premium", get(azet::premium_plan))
-        .route("/api/accounts/key-management/user-key-id", post(azet::post_user_key_id))
+        .route(
+            "/api/accounts/key-management/user-key-id",
+            post(azet::post_user_key_id),
+        )
         .route("/api/tasks", get(accounts::get_tasks))
         .route("/api/accounts/profile", get(accounts::get_profile))
         .route("/api/accounts/profile", post(accounts::post_profile))
@@ -216,6 +231,7 @@ pub fn api_router(env: Env) -> Router {
         )
         // Devices (stub - device tracking not implemented, JWT-based auth)
         .route("/api/devices", get(devices::get_devices))
+        .route("/api/devices/{id}/deactivate", post(devices::deactivate))
         .route("/api/devices/knowndevice", get(devices::get_known_device))
         .route(
             "/api/devices/identifier/{device_id}",

@@ -14,9 +14,20 @@ const OFFLINE_GRACE_DAYS: i64 = 7; // CONTRACT "Client rules": a cached answer c
 const RECHECK_HOURS: i64 = 24; // and is refreshed at most once a day
 
 /// Premium if the last licence answer was active/trial, not past its end, and not older than the 7-day grace.
-pub fn premium_from(status: Option<&str>, expires_at: Option<&str>, checked_at: Option<&str>, now: DateTime<Utc>) -> bool {
-    let parse = |s: &str| DateTime::parse_from_rfc3339(s).ok().map(|d| d.with_timezone(&Utc));
-    let fresh = checked_at.and_then(parse).is_some_and(|c| now - c < Duration::days(OFFLINE_GRACE_DAYS));
+pub fn premium_from(
+    status: Option<&str>,
+    expires_at: Option<&str>,
+    checked_at: Option<&str>,
+    now: DateTime<Utc>,
+) -> bool {
+    let parse = |s: &str| {
+        DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|d| d.with_timezone(&Utc))
+    };
+    let fresh = checked_at
+        .and_then(parse)
+        .is_some_and(|c| now - c < Duration::days(OFFLINE_GRACE_DAYS));
     let live = match expires_at {
         None | Some("") => true, // lifetime
         Some(e) => parse(e).is_some_and(|e| e > now),
@@ -26,39 +37,68 @@ pub fn premium_from(status: Option<&str>, expires_at: Option<&str>, checked_at: 
 
 pub fn user_premium(row: &Value) -> bool {
     let s = |k: &str| row.get(k).and_then(|v| v.as_str());
-    premium_from(s("azet_status"), s("azet_expires_at"), s("azet_checked_at"), Utc::now())
+    premium_from(
+        s("azet_status"),
+        s("azet_expires_at"),
+        s("azet_checked_at"),
+        Utc::now(),
+    )
 }
 
 /// Looks the account's licence state up, re-validating with the licence service when the cache is a day old.
 pub async fn premium_for(env: &Env, user_id: &str) -> bool {
-    let Ok(db) = db::get_db(env) else { return false };
+    let Ok(db) = db::get_db(env) else {
+        return false;
+    };
     let Ok(q) = db
         .prepare("SELECT azet_license, azet_status, azet_expires_at, azet_checked_at FROM users WHERE id = ?1")
         .bind(&[user_id.into()])
     else {
         return false;
     };
-    let Ok(Some(row)) = q.first::<Value>(None).await else { return false };
-    let key = row.get("azet_license").and_then(|v| v.as_str()).unwrap_or("");
+    let Ok(Some(row)) = q.first::<Value>(None).await else {
+        return false;
+    };
+    let key = row
+        .get("azet_license")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let stale = row
         .get("azet_checked_at")
         .and_then(|v| v.as_str())
         .and_then(|c| DateTime::parse_from_rfc3339(c).ok())
-        .map_or(true, |c| Utc::now() - c.with_timezone(&Utc) > Duration::hours(RECHECK_HOURS));
+        .map_or(true, |c| {
+            Utc::now() - c.with_timezone(&Utc) > Duration::hours(RECHECK_HOURS)
+        });
     if !key.is_empty() && stale {
         // A failed check does not move "last checked" (CONTRACT), so the grace runs from the last good answer.
-        if let Ok((200, body)) = suite(env, "validate", json!({"product": "pass", "device_id": user_id, "license_key": key})).await {
+        if let Ok((200, body)) = suite(
+            env,
+            "validate",
+            json!({"product": "pass", "device_id": user_id, "license_key": key}),
+        )
+        .await
+        {
             store(env, user_id, Some(key), &body).await;
-            return premium_from(body["status"].as_str(), body["expires_at"].as_str(), Some(&db::now_string()), Utc::now());
+            return premium_from(
+                body["status"].as_str(),
+                body["expires_at"].as_str(),
+                Some(&db::now_string()),
+                Utc::now(),
+            );
         }
     }
     user_premium(&row)
 }
 
 async fn suite(env: &Env, path: &str, body: Value) -> Result<(u16, Value), AppError> {
-    let base = env.var("SUITE_API_URL").map(|v| v.to_string()).unwrap_or_else(|_| DEFAULT_SUITE_API.into());
+    let base = env
+        .var("SUITE_API_URL")
+        .map(|v| v.to_string())
+        .unwrap_or_else(|_| DEFAULT_SUITE_API.into());
     let mut init = RequestInit::new();
-    init.with_method(Method::Post).with_body(Some(body.to_string().into()));
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
     let mut req = Request::new_with_init(&format!("{base}/suite/v1/{path}"), &init)?;
     req.headers_mut()?.set("Content-Type", "application/json")?;
     let mut res = Fetch::Request(req).send().await?;
@@ -82,7 +122,11 @@ async fn store(env: &Env, user_id: &str, key: Option<&str>, body: &Value) {
 /// POST /api/accounts/license — the self-hosted "Premium" page uploads a licence file here.
 /// Any upload (file or plain text) containing an AZET key works; the key is activated for this account.
 #[worker::send]
-pub async fn post_license(claims: Claims, State(env): State<Arc<Env>>, body: Bytes) -> Result<Json<Value>, AppError> {
+pub async fn post_license(
+    claims: Claims,
+    State(env): State<Arc<Env>>,
+    body: Bytes,
+) -> Result<Json<Value>, AppError> {
     let text = String::from_utf8_lossy(&body).to_uppercase();
     let key = text
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
@@ -97,15 +141,24 @@ pub async fn post_license(claims: Claims, State(env): State<Arc<Env>>, body: Byt
     .await
     .map_err(|_| AppError::BadRequest("The license server could not be reached. Nothing was changed. Check the connection and try again.".into()))?;
     if status != 200 {
-        return Err(AppError::BadRequest(contract_sentence(answer["error"].as_str().unwrap_or("unknown"))));
+        return Err(AppError::BadRequest(contract_sentence(
+            answer["error"].as_str().unwrap_or("unknown"),
+        )));
     }
     store(&env, &claims.sub, Some(&key), &answer).await;
-    Ok(Json(json!({"ok": true, "status": answer["status"], "plan": answer["plan"], "expires_at": answer["expires_at"]})))
+    Ok(Json(
+        json!({"ok": true, "status": answer["status"], "plan": answer["plan"], "expires_at": answer["expires_at"]}),
+    ))
 }
 
 /// Frees the account's seat when the account is deleted (never refused by the licence service).
 pub async fn release_seat(env: &Env, user_id: &str) {
-    let _ = suite(env, "deactivate", json!({"product": "pass", "device_id": user_id})).await;
+    let _ = suite(
+        env,
+        "deactivate",
+        json!({"product": "pass", "device_id": user_id}),
+    )
+    .await;
 }
 
 /// POST /api/accounts/key-management/user-key-id — 2026.9 clients backfill a key id; nothing on this server reads it.
@@ -132,15 +185,37 @@ mod tests {
     use super::*;
     #[test]
     fn premium_rules() {
-        let now = DateTime::parse_from_rfc3339("2026-10-06T00:00:00Z").unwrap().with_timezone(&Utc);
+        let now = DateTime::parse_from_rfc3339("2026-10-06T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
         let fresh = Some("2026-10-05T00:00:00Z");
         assert!(premium_from(Some("active"), None, fresh, now)); // lifetime
-        assert!(premium_from(Some("active"), Some("2027-01-01T00:00:00Z"), fresh, now));
-        assert!(!premium_from(Some("active"), Some("2026-10-01T00:00:00Z"), fresh, now)); // ended
+        assert!(premium_from(
+            Some("active"),
+            Some("2027-01-01T00:00:00Z"),
+            fresh,
+            now
+        ));
+        assert!(!premium_from(
+            Some("active"),
+            Some("2026-10-01T00:00:00Z"),
+            fresh,
+            now
+        )); // ended
         assert!(!premium_from(Some("expired"), None, fresh, now));
         assert!(!premium_from(None, None, None, now)); // free plan
-        assert!(premium_from(Some("active"), None, Some("2026-09-30T00:00:00Z"), now)); // offline, day 6
-        assert!(!premium_from(Some("active"), None, Some("2026-09-28T00:00:00Z"), now)); // offline past 7 days
+        assert!(premium_from(
+            Some("active"),
+            None,
+            Some("2026-09-30T00:00:00Z"),
+            now
+        )); // offline, day 6
+        assert!(!premium_from(
+            Some("active"),
+            None,
+            Some("2026-09-28T00:00:00Z"),
+            now
+        )); // offline past 7 days
     }
 }
 
@@ -148,19 +223,32 @@ mod tests {
 /// icon from DuckDuckGo's public favicon service and return it from our own host (clients only allow images from the
 /// configured icons URL). The domain is the only input and is already public; no account data is involved.
 #[worker::send]
-pub async fn icon(axum::extract::Path(domain): axum::extract::Path<String>) -> axum::response::Response {
+pub async fn icon(
+    axum::extract::Path(domain): axum::extract::Path<String>,
+) -> axum::response::Response {
     use axum::{http::StatusCode, response::IntoResponse};
-    let ok = !domain.is_empty() && domain.len() <= 253 && domain.contains('.') && domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    let ok = !domain.is_empty()
+        && domain.len() <= 253
+        && domain.contains('.')
+        && domain
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
     if !ok {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let Ok(req) = Request::new(&format!("https://icons.duckduckgo.com/ip3/{domain}.ico"), Method::Get) else {
+    let Ok(req) = Request::new(
+        &format!("https://icons.duckduckgo.com/ip3/{domain}.ico"),
+        Method::Get,
+    ) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     match Fetch::Request(req).send().await {
         Ok(mut r) if r.status_code() == 200 => match r.bytes().await {
             Ok(b) if !b.is_empty() && b.len() <= 100_000 => (
-                [("content-type", "image/x-icon"), ("cache-control", "public, max-age=604800")],
+                [
+                    ("content-type", "image/x-icon"),
+                    ("cache-control", "public, max-age=604800"),
+                ],
                 b,
             )
                 .into_response(),

@@ -42,8 +42,8 @@ edit('app/build.gradle.kts', (s) => s.replace(`    packaging {
             useLegacyPackaging = true
         }
         resources {`).replace(/(\n        versionName = libs\.versions\.appVersionName\.get\(\)\n)/, '$1        ndk { abiFilters += listOf("arm64-v8a") }\n'))
-// our own version line: upstream 2026.9.1 + AZET build 1 (versionCode grows with each AZET release)
-edit('gradle/libs.versions.toml', (s) => s.replace(/appVersionCode = "\d+"/, 'appVersionCode = "20260901"').replace(/appVersionName = "[^"]+"/, 'appVersionName = "2026.9.1-azet1"'))
+// our own version line: upstream 2026.9.1 + AZET build 2 (ready-zero) (versionCode grows with each AZET release)
+edit('gradle/libs.versions.toml', (s) => s.replace(/appVersionCode = "\d+"/, 'appVersionCode = "20260902"').replace(/appVersionName = "[^"]+"/, 'appVersionName = "2026.9.1-azet2"'))
 // GPL-3.0 source offer on the About screen's copyright line
 edit('app/src/main/kotlin/com/x8bit/bitwarden/ui/platform/feature/settings/about/AboutViewModel.kt', (s) =>
   s.replace('copyrightInfo = "© Bitwarden Inc. 2015-${Year.now(clock).value}".asText(),', 'copyrightInfo = "© Bitwarden Inc. 2015-${Year.now(clock).value}, AZET LLC. GPL-3.0, source: github.com/neulketing/azet-pass".asText(),'))
@@ -69,10 +69,54 @@ for (const mod of ['app', 'ui', 'core', 'data', 'network', 'cxf', 'authenticator
       let v = t.replaceAll('Bitwarden', 'AZET Pass')
       if (ko) v = v.replace(/AZET Pass(은|을|과|으로|이 )/g, (_, x) => 'AZET Pass' + { '은': '는', '을': '를', '과': '와', '으로': '로', '이 ': '가 ' }[x])
       return `>${v}<`
-    })
+    }).replace(/>([^<]*bitwarden\.com[^<]*)</g, (m, t) => `>${t // domains in sentences (lane 98): our pages
+      .replaceAll('bitwarden.com/download', 'azet.io/products/pass').replaceAll('bitwarden.com/help', 'pass.azet.io/help')
+      .replace(/privacy policy on bitwarden\.com/g, 'privacy policy on azet.io').replaceAll('bitwarden.com', 'pass.azet.io')}<`)
     if (out !== s) fs.writeFileSync(f, out)
   }
 }
+
+// Ready-zero (lane 98, inventory-pass.md #32-#37): no Bitwarden region, page or feature our server lacks
+const A = 'app/src/main/kotlin/com/x8bit/bitwarden/'
+// #32 region picker: pass.azet.io and self-hosted only (EU sent the email and password hash to Bitwarden EU)
+edit(A + 'ui/auth/feature/landing/LandingViewModel.kt', (s) => s.replace('.filterNot { it == Environment.Type.FED_RAMP && !isFedRampEnabled }', '.filterNot { it == Environment.Type.EU || (it == Environment.Type.FED_RAMP && !isFedRampEnabled) }'))
+edit(A + 'ui/auth/feature/startregistration/StartRegistrationViewModel.kt', (s) => s.replace('.filterNot { it == Environment.Type.FED_RAMP }', '.filterNot { it == Environment.Type.FED_RAMP || it == Environment.Type.EU }'))
+// #33 enterprise SSO (the server has none)
+edit(A + 'ui/auth/feature/login/LoginScreen.kt', (s) => s.replace(/\n        BitwardenOutlinedButton\(\n            label = stringResource\(id = BitwardenString\.log_in_sso\),[\s\S]*?\n        \)\n/, '\n'))
+// #34 marketing-mail switch (we send no newsletter; its link was bitwarden.com/email-preferences)
+edit(A + 'ui/auth/feature/startregistration/StartRegistrationScreen.kt', (s) => s.replace(/\n        if \(state\.selectedEnvironmentType != Environment\.Type\.SELF_HOSTED\) \{\n            Spacer\(modifier = Modifier\.height\(8\.dp\)\)\n            ReceiveMarketingEmailsSwitch\([\s\S]*?\n        \}\n/, '\n'))
+// #35 the sign-up mail link (https://pass.azet.io/redirect-connector.html#finish-signup…) opens the app; assetlinks.json is
+// served by the gateway (server/gw/worker.ts)
+edit('app/src/main/AndroidManifest.xml', (s) => s.replace('<data android:host="*.bitwarden.com" />', '<data android:host="pass.azet.io" />\n                <data android:host="*.bitwarden.com" />'))
+// #37 "allow authenticator syncing" needs Bitwarden's own Authenticator app (signed by Bitwarden)
+edit(A + 'ui/platform/feature/settings/accountsecurity/AccountSecurityViewModel.kt', (s) => s.replace('shouldShowEnableAuthenticatorSync = isBuildVersionAtLeast(Build.VERSION_CODES.S),', 'shouldShowEnableAuthenticatorSync = false, // AZET: no Authenticator app to sync with'))
+// About: "learn about organizations" (no organizations)
+edit(A + 'ui/platform/feature/settings/about/AboutScreen.kt', (s) => s.replace(/\n        BitwardenExternalLinkRow\(\n            text = stringResource\(id = BitwardenString\.learn_org\),[\s\S]*?\n        \)\n/, '\n'))
+// #36 help and product links in Kotlin -> pass.azet.io/help (anchors) or azet.io
+const HELP = 'https://pass.azet.io/help/'
+const helpTopic = (slug) => {
+  const t = [[/^import/, 'import'], [/auto-?fill|uri-match|fill-assist/, 'autofill'], [/two-step/, 'two-step'], [/send/, 'send'],
+    [/kdf|encryption-key|fingerprint/, 'encryption'], [/passkey/, 'passkeys'], [/website-icons/, 'icons'], [/managing-items|generator|authenticator/, 'items'],
+    [/server-geographies/, 'server'], [/organization|transfer-ownership|families/, 'not-included'], [/flight-recorder/, 'contact']].find(([re]) => re.test(slug))
+  return HELP + (t ? '#' + t[1] : '')
+}
+const mapBw = (url) => {
+  const pth = new URL(url.replace(/\.$/, '')).pathname
+  if (pth.startsWith('/email-preferences')) return url
+  if (pth.startsWith('/help/password-manager-plans')) return 'https://azet.io/products/pass#plans'
+  if (pth.startsWith('/help')) return helpTopic(pth.slice(6))
+  return 'https://azet.io/products/pass'
+}
+let relinked = 0
+for (const mod of ['app', 'ui', 'core', 'data', 'network', 'cxf', 'authenticatorbridge']) {
+  if (!fs.existsSync(p(mod, 'src/main'))) continue
+  for (const f of walk(p(mod, 'src/main')).filter((f) => f.endsWith('.kt'))) {
+    const s = fs.readFileSync(f, 'utf8')
+    const out = s.replace(/https:\/\/(?:www\.)?bitwarden\.com(?![\w.-])(?:\/[^"'\s)]*)?/g, mapBw)
+    if (out !== s) { fs.writeFileSync(f, out); relinked++ }
+  }
+}
+console.log(`rebrand-android: ready-zero links rewritten in ${relinked} files`)
 
 // vectors: same files, same viewports
 const vector = (w, h, body) => `<?xml version="1.0" encoding="utf-8"?>

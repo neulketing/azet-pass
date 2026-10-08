@@ -6,8 +6,14 @@ interface Env {
   INTERNAL_KEY: string; // 백엔드와 같은 값 — wrangler secret (볼트 AZET_PASS_INTERNAL_KEY)
 }
 
+// io.azet.pass signing certificate (vault AZET_PASS_ANDROID_KEYSTORE_B64, alias azet-pass)
+const ASSET_LINKS = [{ relation: ["delegate_permission/common.handle_all_urls"], target: { namespace: "android_app", package_name: "io.azet.pass",
+  sha256_cert_fingerprints: ["7C:14:57:6D:08:E3:C3:5B:D3:96:94:1E:50:51:24:E5:C1:4B:78:93:DF:1C:8F:D1:E6:DF:9D:9D:F2:8E:9F:2B"] } }];
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
+    // Android App Links: lets AZET Pass for Android open the sign-up mail link (/redirect-connector.html#finish-signup…)
+    if (new URL(req.url).pathname === "/.well-known/assetlinks.json") return Response.json(ASSET_LINKS);
     if (!env.INTERNAL_KEY) return new Response("unavailable", { status: 503 });
     const h = new Headers(req.headers);
     h.delete("Cookie");

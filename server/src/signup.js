@@ -77,7 +77,8 @@ export async function signupGate(request, env, url, ctx) {
     const exists = await env.vault1.prepare("SELECT 1 FROM users WHERE email = ?1").bind(email).first();
     if (!exists) {
       const token = await makeSignupToken(secret, email);
-      const link = `https://${url.host}/#/finish-signup?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&fromEmail=true`;
+      // redirect-connector form, as Bitwarden mails it: Android App Links cannot match a "#/" route, the web page forwards to it
+      const link = `https://${url.host}/redirect-connector.html#finish-signup?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&fromEmail=true`;
       // sent after the answer, as AZET Shield does: the mail API takes seconds and the page waits on this call
       ctx.waitUntil(sendMail(env, email, link).catch((e) => console.error("pass-signup-mail", String(e))));
     }

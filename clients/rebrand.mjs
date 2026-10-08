@@ -134,6 +134,12 @@ if (fs.existsSync(p(eb))) {
   j.appId = 'io.azet.pass'
   j.copyright = 'Copyright © 2015-2026 Bitwarden Inc. and contributors (GPL-3.0); AZET Pass changes © 2026 AZET LLC'
   j.publish = { provider: 'generic', url: `${BASE}/desktop` } // update feed on our server (Bitwarden: artifacts.bitwarden.com)
+  // Microsoft Store identity: Partner Center > AZET Pass (9NF3686MBT1N) > Product identity
+  Object.assign(j.appx, { applicationId: 'azetpass', identityName: 'AZET.ioSoftware.AZETPass',
+    publisher: 'CN=FD00C6AE-19A7-454C-8593-06EEFB12B464', publisherDisplayName: 'AZET.io Software',
+    minVersion: '10.0.17763.0', maxVersionTested: '10.0.26100.0' }) // the Store refuses MinVersion <= 10.0.17134.0
+  const am = 'apps/desktop/custom-appx-manifest.xml' // the Appx template build-msix.sh fills (same as Bitwarden's appx-cross-build.ps1)
+  edit(am, (s) => s.replace('<uap:DisplayName>Bitwarden</uap:DisplayName>', '<uap:DisplayName>AZET Pass</uap:DisplayName>'))
   fs.writeFileSync(p(eb), JSON.stringify(j, null, 2) + '\n')
   const res = p('apps/desktop/resources')
   const big = path.join(here, 'brand/generated') // made by brand/make-icons.sh (+ iconutil, magick); committed so CI needs no Mac tools
@@ -146,6 +152,7 @@ if (fs.existsSync(p(eb))) {
       if (m && fs.existsSync(path.join(big, `blue-${m[1]}.png`))) fs.copyFileSync(path.join(big, `blue-${m[1]}.png`), path.join(res, dir, f))
     }
   }
+  for (const f of fs.readdirSync(path.join(big, 'appx'))) fs.copyFileSync(path.join(big, 'appx', f), path.join(res, 'appx', f))
 }
 
 // 6. 변형 축: TOTP code in the item view on the free plan (Bitwarden: Premium only). Server side, every item
@@ -171,6 +178,8 @@ if (fs.existsSync(p(nb))) edit(nb, (s) => s.replace(/runCommand\("brew", \["inst
 const SRC = 'https://github.com/neulketing/azet-pass'
 const about = 'apps/browser/src/tools/popup/settings/about-dialog/about-dialog.component.html'
 if (fs.existsSync(p(about))) edit(about, (s) => s.replace('<p>&copy; Bitwarden Inc. 2015-{{ year }}</p>', `<p>&copy; Bitwarden Inc. 2015-{{ year }}, AZET LLC. GPL-3.0, source: <a href="${SRC}" target="_blank" rel="noreferrer">github.com/neulketing/azet-pass</a></p>`))
+const dabout = 'apps/desktop/src/main/menu/menu.about.ts'
+if (fs.existsSync(p(dabout))) edit(dabout, (s) => s.replace('"\\nArchitecture " +\n          process.arch;', `"\\nArchitecture " +\n          process.arch +\n          "\\n\\n© Bitwarden Inc. 2015-${new Date().getFullYear()}, AZET LLC. GPL-3.0, source: ${SRC}";`))
 // frontend-layout is the web shell; anon-layout draws the footer of the login and sign-up screens (web and extension)
 for (const foot of ['apps/web/src/app/layouts/frontend-layout.component.html', 'libs/components/src/anon-layout/anon-layout.component.html'])
   if (fs.existsSync(p(foot))) edit(foot, (s) => s.replace('<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc.</div>', `<div bitTypography="body2">&copy; {{ year }} Bitwarden Inc., AZET LLC. GPL-3.0, <a href="${SRC}" target="_blank" rel="noreferrer">source</a></div>`))

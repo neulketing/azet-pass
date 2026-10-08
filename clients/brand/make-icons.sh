@@ -12,3 +12,12 @@ for s in "$@"; do
   svg '#7c7c7c' '' | rsvg-convert -w "$s" -h "$s" -o "$out/gray-$s.png"
   svg '#175ddc' "$LOCK" | rsvg-convert -w "$s" -h "$s" -o "$out/locked-$s.png"
 done
+
+# Windows Store (Appx) tiles: white mark on transparent, same files and sizes as Bitwarden's resources/appx (the
+# manifest's BackgroundColor #175DDC fills the tile); mark height = half the tile's shorter side
+mkdir -p "$out/appx"
+for t in Square44x44Logo:44:44 Square150x150Logo:150:150 StoreLogo:50:50 Wide310x150Logo:310:150 SplashScreen:620:300; do
+  IFS=: read -r n w h <<<"$t"; m=$(( (w < h ? w : h) / 2 ))
+  sed 's/<path /<path fill="#ffffff" /' "$(dirname "$0")/mark.svg" | rsvg-convert -h "$m" -o /tmp/azp-mark.png
+  magick -size "${w}x${h}" xc:none /tmp/azp-mark.png -gravity center -composite "$out/appx/$n.png"
+done

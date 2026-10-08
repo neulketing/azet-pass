@@ -64,12 +64,16 @@ const OVR = {
   emailPlaceholder: ['user@example.com , user@acme.com', 'user@example.com , user@acme.com'],
   emailPlaceholderMultiple: ['user@example.com, user@acme.com', 'user@example.com, user@acme.com'],
   selfHostedBaseUrlHint: ['Specify the base URL of your on-premises hosted server. Example: https://vault.example.com', '직접 운영하는 서버의 기본 URL을 입력하세요. 예: https://vault.example.com'],
+  upgradeCompleteSecurity: ['AZET Pass Premium', 'AZET Pass Premium'],
+  individualUpgradeDescriptionMessage: ['Premium adds file attachments, file Send, password health reports and archive to your account.', 'Premium은 계정에 첨부 파일, 파일 Send, 비밀번호 점검 보고서, 보관 기능을 더합니다.'],
+  alreadyHaveSubscriptionSelfHostedMessage: ['Enter your AZET Pass license key to add Premium to this account.', 'AZET Pass 라이선스 키를 입력하면 이 계정에 Premium이 추가됩니다.'],
+  alreadyHaveSubscriptionSelfHostedMessageV3: ['Enter your AZET Pass license key to add Premium to this account.', 'AZET Pass 라이선스 키를 입력하면 이 계정에 Premium이 추가됩니다.'],
   continueToHelpCenterDesc: ['Learn more about using AZET Pass on the help page.', '도움말 페이지에서 AZET Pass 사용법을 더 알아보세요.'],
 }
 // new keys for the Premium benefits our server really gives (web vault Premium page)
 const AZ_KEYS = {
-  en: { azetPremiumReports: { message: 'Password health reports: exposed, reused and weak passwords' }, azetPremiumFileSend: { message: 'File Send' }, azetPremiumArchive: { message: 'Archive items out of your vault list' } },
-  ko: { azetPremiumReports: { message: '비밀번호 점검 보고서: 유출·재사용·약한 비밀번호' }, azetPremiumFileSend: { message: '파일 Send' }, azetPremiumArchive: { message: '항목 보관(목록에서 치워 두기)' } },
+  en: { azetPremiumReports: { message: 'Password health reports: exposed, reused and weak passwords' }, azetPremiumFileSend: { message: 'File Send' }, azetPremiumArchive: { message: 'Archive items out of your vault list' }, azetPremiumOnlyDesc: { message: 'This is an AZET Pass Premium feature. Your free plan has unlimited passwords and devices, verification codes, text Send and the data breach report.' } },
+  ko: { azetPremiumReports: { message: '비밀번호 점검 보고서: 유출·재사용·약한 비밀번호' }, azetPremiumFileSend: { message: '파일 Send' }, azetPremiumArchive: { message: '항목 보관(목록에서 치워 두기)' }, azetPremiumOnlyDesc: { message: 'AZET Pass Premium 기능입니다. 무료 요금제에서도 비밀번호·기기 수 제한 없이 쓰고, 인증 코드·텍스트 Send·데이터 유출 보고서를 이용할 수 있습니다.' } },
 }
 for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
   for (const lang of fs.readdirSync(dir)) {
@@ -277,6 +281,18 @@ swap(E + 'billing/popup/settings/premium-v2.component.html', ['premiumSignUpTwoS
 // biometric unlock in the browser needs the desktop app, which is not released
 swap(E + 'auth/popup/settings/account-security.component.html', [['@if (!(sharedUnlockFeatureEnabled$ | async)) {\n            <bit-form-control [disableMargin]="!((pinEnabled$ | async) || this.form.value.pin)">\n              <input bitCheckbox id="biometric"',
   '@if (false) {\n            <bit-form-control [disableMargin]="!((pinEnabled$ | async) || this.form.value.pin)">\n              <input bitCheckbox id="biometric"']])
+
+// #10 #28 #38 Premium cannot be bought yet (supervisor 10-08 15:2x: no waitlist, no upgrade or purchase buttons before
+// checkout; keep the free-plan facts). Premium badges and gates say what the feature is and close; licence holders keep
+// their subscription page (upload / update licence).
+swap(W + 'billing/individual/services/premium-subscription-routing.service.ts', [['          if (!hasPremiumFromAnyOrganization) {\n            return "settings/subscription/premium";\n          }', '          // AZET: no Premium checkout yet, so free accounts get no subscription/upgrade menu']])
+swap(W + 'billing/individual/premium/self-hosted-premium.component.html', [[/\s*<!-- Two-Card Layout -->[\s\S]*?<!-- View all plans Link -->[\s\S]*?<\/div>\n/, '\n']])
+swap(W + 'billing/services/web-premium-upgrade-prompt.service.ts', [['    if (!organizationId) {\n      await this.promptForPremiumVNext(account);\n      return;\n    }',
+  '    if (!organizationId) {\n      // AZET: nothing to buy yet; say what the feature is\n      await this.dialogService.openSimpleDialog({ title: { key: "premiumRequired" }, content: { key: "azetPremiumOnlyDesc" }, acceptButtonText: { key: "ok" }, cancelButtonText: null, type: "info" });\n      this._upgradeConfirmed$.next(false);\n      return;\n    }']])
+swap(E + 'billing/popup/services/browser-premium-upgrade-prompt.service.ts', [['    PremiumUpgradeDialogComponent.open(this.dialogService);',
+  '    // AZET: nothing to buy yet; say what the feature is\n    void PremiumUpgradeDialogComponent;\n    await this.dialogService.openSimpleDialog({ title: { key: "premiumMembership" }, content: { key: "azetPremiumOnlyDesc" }, acceptButtonText: { key: "ok" }, cancelButtonText: null, type: "info" });']])
+swap(E + 'tools/popup/settings/settings-v2.component.html', [[/\s*@if \(!\(hasPremium\$ \| async\)\) \{\s*<bit-callout \[icon\]="null">\s*\{\{ "unlockFeaturesWithPremium" \| i18n \}\}[\s\S]*?<\/bit-callout>\s*\}/, '']])
+swap(E + 'billing/popup/settings/premium-v2.component.html', [[/\s*<p class="tw-mt-5 tw-mb-0">\{\{ priceString \}\}<\/p>/, ''], [/\s*<button\s+bitButton\s+type="submit"\s+buttonType="primary"\s+\(click\)="purchase\(\)"[\s\S]*?<\/button>/, '']])
 
 // desktop help menu (#39): no Bitwarden social accounts, mobile or extension store submenus; bug reports to our repo
 swap('apps/desktop/src/main/menu/menu.help.ts', [['      this.separator,\n      this.followUs,\n', ''],

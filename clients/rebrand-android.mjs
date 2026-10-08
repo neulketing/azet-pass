@@ -118,6 +118,33 @@ for (const mod of ['app', 'ui', 'core', 'data', 'network', 'cxf', 'authenticator
 }
 console.log(`rebrand-android: ready-zero links rewritten in ${relinked} files`)
 
+// #38 Premium cannot be bought yet (supervisor 10-08: no upgrade or purchase buttons before checkout): every
+// "Premium required" two-button dialog whose confirm is "Upgrade to Premium" becomes a one-button notice (title, message, OK)
+const callEnd = (s, open) => { let d = 0; for (let i = open; i < s.length; i++) { if (s[i] === '(') d++; else if (s[i] === ')' && --d === 0) return i } return -1 }
+const topArgs = (body) => { const out = []; let d = 0, cur = ''; for (const ch of body) { if ('({['.includes(ch)) d++; if (')}]'.includes(ch)) d--; if (ch === ',' && d === 0) { out.push(cur); cur = '' } else cur += ch } if (cur.trim()) out.push(cur); return out }
+let unupgraded = 0
+for (const f of walk(p('app/src/main/kotlin')).filter((f) => f.endsWith('.kt'))) {
+  let s = fs.readFileSync(f, 'utf8')
+  if (!s.includes('BitwardenString.upgrade_to_premium')) continue
+  let from = 0, changed = false
+  for (;;) {
+    const at = s.indexOf('BitwardenTwoButtonDialog(', from)
+    if (at < 0) break
+    const open = at + 'BitwardenTwoButtonDialog'.length, end = callEnd(s, open)
+    const body = s.slice(open + 1, end)
+    if (!body.includes('BitwardenString.upgrade_to_premium')) { from = end; continue }
+    const args = Object.fromEntries(topArgs(body).map((a) => a.trim()).filter(Boolean).map((a) => [a.split('=')[0].trim(), a.slice(a.indexOf('=') + 1).trim()]))
+    const ind = s.slice(s.lastIndexOf('\n', at) + 1, at).match(/^\s*/)[0]
+    const call = `BitwardenBasicDialog(\n${ind}    title = ${args.title},\n${ind}    message = ${args.message},\n${ind}    onDismissRequest = ${args.onDismissRequest},\n${ind})`
+    s = s.slice(0, at) + call + s.slice(end + 1); from = at + call.length; changed = true; unupgraded++
+  }
+  if (changed) {
+    if (!s.includes('import com.bitwarden.ui.platform.components.dialog.BitwardenBasicDialog')) s = s.replace(/\nimport /, '\nimport com.bitwarden.ui.platform.components.dialog.BitwardenBasicDialog\nimport ')
+    fs.writeFileSync(f, s)
+  }
+}
+console.log(`rebrand-android: ${unupgraded} upgrade dialogs made notices`)
+
 // vectors: same files, same viewports
 const vector = (w, h, body) => `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"

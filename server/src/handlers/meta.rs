@@ -69,6 +69,36 @@ async fn xon_get(path: &str, cache_ttl: Option<i32>) -> Result<(u16, Value), App
     Ok((status, body))
 }
 
+/// The XposedOrNot breach catalogue (~650 KB), kept in the Workers cache for a day.
+async fn breach_catalog() -> Vec<Value> {
+    use worker::{Cache, Headers, Response};
+    const KEY: &str = "https://pass.azet.io/__cache/xon-breaches";
+    let cache = Cache::default();
+    if let Ok(Some(mut hit)) = cache.get(KEY, false).await {
+        if let Ok(v) = hit.json::<Value>().await {
+            return v.as_array().cloned().unwrap_or_default();
+        }
+    }
+    for _ in 0..2 {
+        if let Ok((200, body)) = xon_get("/breaches", Some(86400)).await {
+            let list = body["exposedBreaches"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            if !list.is_empty() {
+                let headers = Headers::new();
+                let _ = headers.set("Cache-Control", "max-age=86400");
+                let _ = headers.set("Content-Type", "application/json");
+                if let Ok(r) = Response::ok(Value::Array(list.clone()).to_string()) {
+                    let _ = cache.put(KEY, r.with_headers(headers)).await;
+                }
+                return list;
+            }
+        }
+    }
+    vec![]
+}
+
 /// GET /api/hibp/breach?username=...
 ///
 /// AZET: the web vault's free "Data breach report". HIBP's account search needs a paid key, so the lookup goes to
@@ -90,14 +120,23 @@ pub async fn hibp_breach(
             _ => format!("%{b:02X}"),
         })
         .collect();
-    let (status, found) = xon_get(&format!("/check-email/{enc}"), None).await?;
+    // shared Cloudflare egress IPs get throttled now and then: up to three tries, 0.8 s apart
+    let mut res = xon_get(&format!("/check-email/{enc}"), None).await;
+    for _ in 0..2 {
+        if matches!(res, Ok((200 | 404, _))) {
+            break;
+        }
+        worker::Delay::from(std::time::Duration::from_millis(800)).await;
+        res = xon_get(&format!("/check-email/{enc}"), None).await;
+    }
+    let (status, found) = res?;
     if status == 404 {
         return Ok(Json(json!([])));
     }
     if status != 200 {
-        return Err(AppError::BadRequest(
-            "The breach database did not answer. Try again later.".into(),
-        ));
+        return Err(AppError::BadRequest(format!(
+            "The breach database did not answer (HTTP {status}). Try again in a minute."
+        )));
     }
     let names: Vec<&str> = found["breaches"]
         .as_array()
@@ -105,15 +144,7 @@ pub async fn hibp_breach(
         .and_then(|a| a.as_array())
         .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
-    let (dstatus, details) = xon_get("/breaches", Some(86400)).await?;
-    let all = if dstatus == 200 {
-        details["exposedBreaches"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
+    let all = breach_catalog().await;
     let out: Vec<Value> = names
         .iter()
         .map(|name| {

@@ -278,6 +278,11 @@ swap(E + 'billing/popup/settings/premium-v2.component.html', ['premiumSignUpTwoS
 swap(E + 'auth/popup/settings/account-security.component.html', [['@if (!(sharedUnlockFeatureEnabled$ | async)) {\n            <bit-form-control [disableMargin]="!((pinEnabled$ | async) || this.form.value.pin)">\n              <input bitCheckbox id="biometric"',
   '@if (false) {\n            <bit-form-control [disableMargin]="!((pinEnabled$ | async) || this.form.value.pin)">\n              <input bitCheckbox id="biometric"']])
 
+// desktop help menu (#39): no Bitwarden social accounts, mobile or extension store submenus; bug reports to our repo
+swap('apps/desktop/src/main/menu/menu.help.ts', [['      this.separator,\n      this.followUs,\n', ''],
+  ['      this.separator,\n      this.getMobileApp,\n      this.getBrowserExtension,\n', ''],
+  ['"https://github.com/bitwarden/clients/issues"', `"${SRC}/issues"`]])
+
 // #12 #15 #21 #22 #24 #29: every Bitwarden page, store listing and help link in shipped code -> ours. Callbacks
 // (webauthn/duo/connector), images and test fixtures stay; assets.bitwarden.com (phishing list) and github are not touched.
 const helpTopic = (slug) => {

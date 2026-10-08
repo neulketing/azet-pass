@@ -51,4 +51,5 @@ if (process.env.PRINT_TOKEN) { // password grant, as clients do, for API tests t
   const t = await fetch(`${base}/identity/connect/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'password', username: email, password: masterPasswordHash, scope: 'api offline_access', client_id: 'cli', deviceType: '8', deviceIdentifier: crypto.randomUUID(), deviceName: 'test' }) })
   console.log((await t.json()).access_token)
+  if (process.env.PRINT_HASH) console.log(masterPasswordHash) // second line: for routes that re-check the master password
 }

@@ -112,7 +112,7 @@ for (const mod of ['app', 'ui', 'core', 'data', 'network', 'cxf', 'authenticator
   if (!fs.existsSync(p(mod, 'src/main'))) continue
   for (const f of walk(p(mod, 'src/main')).filter((f) => f.endsWith('.kt'))) {
     const s = fs.readFileSync(f, 'utf8')
-    const out = s.replace(/https:\/\/(?:www\.)?bitwarden\.com(?![\w.-])(?:\/[^"'\s)]*)?/g, mapBw)
+    const out = s.replace(/https?:\/\/(?:www\.)?bitwarden\.com(?![\w.-])(?:\/[^"'\s)]*)?/g, mapBw)
     if (out !== s) { fs.writeFileSync(f, out); relinked++ }
   }
 }

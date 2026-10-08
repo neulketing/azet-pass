@@ -321,7 +321,7 @@ const mapBw = (url) => {
   if (/^\/(pricing|go\/start-premium)/.test(pth)) return PRODUCT + '#plans'
   return PRODUCT
 }
-const BW_URL = /https:\/\/(?:www\.)?bitwarden\.com(?![\w.-])(?:\/[^"'`\s)<>,]*)?/g
+const BW_URL = /https?:\/\/(?:www\.)?bitwarden\.com(?![\w.-])(?:\/[^"'`\s)<>,]*)?/g
 const STORE_URL = /https:\/\/(?:chromewebstore\.google\.com|chrome\.google\.com\/webstore)\/detail\/[\w-]+\/nngceckbapebfimnlniiiahkandclblb[^"'`\s)<>]*|https:\/\/addons\.mozilla\.org\/[\w-]+\/firefox\/addon\/bitwarden-password-manager\/[^"'`\s)<>]*|https:\/\/apps\.apple\.com\/[\w/-]*\/app\/bitwarden[\w-]*\/id\d+[^"'`\s)<>]*|https:\/\/addons\.opera\.com\/[\w/-]*bitwarden-free-password-manager\/[^"'`\s)<>]*|https:\/\/microsoftedge\.microsoft\.com\/addons\/detail\/jbkfoedolllekgbhcbcoahefnbanhhlh|https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.(?:x8bit\.bitwarden|bitwarden\.authenticator)/g
 let relinked = 0
 const walkSrc = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AZET Pass Help</title>
+<meta name="description" content="How to use AZET Pass: account, import, autofill, two-step login, Send, attachments, reports and what is not included.">
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="help.css">
+<script>try{if((navigator.language||'').toLowerCase().startsWith('ko')&&!/lang=en/.test(location.search))location.replace('ko.html'+location.hash)}catch(e){}</script>
+</head>
+<body>
+<header class="top"><a class="brand" href="/"><svg viewBox="0 0 26 32" aria-hidden="true"><path fill-rule="evenodd" d="M13 1a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 5a3 3 0 1 0 0 6a3 3 0 0 0 0-6ZM11 16h4v15h-4ZM15 21h5v3.5h-5ZM15 26.5h4v3.5h-4Z"/></svg>AZET Pass</a><nav><a href="ko.html">한국어</a><a class="btn" href="/">Open web vault</a></nav></header>
+<div class="wrap">
+<aside class="toc"><b>Help</b>
+<a href="#start">Getting started</a><a href="#account">Account and master password</a><a href="#import">Import</a><a href="#export">Export</a><a href="#items">Items and search</a><a href="#autofill">Autofill</a><a href="#passkeys">Passkeys</a><a href="#two-step">Two-step login</a><a href="#send">Send</a><a href="#attachments">Attachments</a><a href="#reports">Reports</a><a href="#encryption">Encryption and keys</a><a href="#icons">Website icons</a><a href="#server">Server</a><a href="#browser">Browser requirements</a><a href="#not-included">Not included</a><a href="#contact">Contact</a>
+</aside>
+<main>
+<h1>AZET Pass Help</h1>
+<p class="lead">AZET Pass is a password manager and authenticator. It is built from Bitwarden's open-source apps and syncs through our server at pass.azet.io. Your vault is encrypted on your device before it is synced; we cannot read it.</p>
+
+<section id="start"><h2>Getting started</h2>
+<ol><li>Create an account at <a href="/#/signup">pass.azet.io</a> with your email. We send a confirmation link that works for 24 hours.</li>
+<li>Choose a master password. It unlocks your vault and cannot be reset by anyone, including us.</li>
+<li>Add logins in the web vault, or install the app on your phone and browser (<a href="https://azet.io/products/pass">downloads</a>) and sign in with the same email and master password.</li>
+<li>Bring your passwords from another manager or browser with <a href="#import">Import</a>.</li></ol></section>
+
+<section id="account"><h2>Account and master password</h2>
+<p>Your email is your sign-in name. Change it under <b>Settings › My account › Change email</b>: we email a code to the new address, and your master password re-encrypts your vault key for the new email.</p>
+<p>If you set a master password hint when you signed up, <b>Get master password hint</b> on the sign-in page emails it to you. If you forget the master password itself, the vault cannot be opened; you can delete the account and start again.</p>
+<p>Under <b>Settings › My account</b> you can also log out all sessions, purge the vault or delete the account.</p></section>
+
+<section id="import"><h2>Import</h2>
+<p>Go to <b>Tools › Import data</b> in the web vault, pick the format and upload the file. Common sources: Bitwarden (JSON or CSV), 1Password, LastPass, Keeper, KeePass/KeePassXC, Chrome, Edge, Firefox and Safari password exports, and many more in the format list.</p>
+<p>Delete the exported file after importing: it is not encrypted.</p></section>
+
+<section id="export"><h2>Export</h2>
+<p><b>Tools › Export vault</b> saves your items as JSON, CSV, or an encrypted JSON protected by your account key or a password you choose. Attachments are not included in exports; download them from each item.</p></section>
+
+<section id="items"><h2>Items and search</h2>
+<p>An item is a login, card, identity, secure note or SSH key. Use folders to group them and favourites to keep them at the top. The search box matches names, usernames, website addresses and notes. Deleted items stay in <b>Trash</b> for 30 days.</p>
+<p>Verification codes (TOTP) are on the free plan: add the setup key to a login and the app shows the six-digit code with its countdown.</p></section>
+
+<section id="autofill"><h2>Autofill</h2>
+<p><b>Browser extension:</b> open the extension on a sign-in page and pick the login, or use the keyboard shortcut (Ctrl/Cmd + Shift + L by default). Each saved website address has a match setting (base domain, host, starts with, exact, regular expression, never); the default is base domain. You can block autofill on chosen sites in the extension settings.</p>
+<p>Turn off your browser's own password manager so the two do not compete (Chrome: Settings › Autofill › Password Manager; Firefox: Settings › Privacy › Logins and passwords).</p>
+<p><b>Android:</b> Settings › Autofill in AZET Pass sets it as the autofill service; inline suggestions appear on the keyboard where the app supports them.</p></section>
+
+<section id="passkeys"><h2>Passkeys</h2>
+<p>AZET Pass can store passkeys for websites that offer them: when a site asks to create a passkey, choose AZET Pass, and the passkey is saved in a login item and synced, encrypted, to your other devices. Signing in to pass.azet.io itself with a passkey is not supported; use your master password.</p></section>
+
+<section id="two-step"><h2>Two-step login</h2>
+<p>Protect your account with an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 2FAS and others): <b>Settings › Security › Two-step login › Authenticator app › Manage</b>, scan the QR code and enter the code it shows.</p>
+<p>Save your <b>recovery code</b> from the same page. If you lose the phone with the authenticator, the recovery code turns two-step login off so you can sign in. Without it and without the device, we cannot turn it off for you.</p></section>
+
+<section id="send"><h2>Send</h2>
+<p>Send shares text or a file through a link that expires. You set the deletion date, an optional password, a maximum number of opens, and whether to hide your email. The content is encrypted in your browser; the key is in the part of the link after <code>#</code>, which never reaches our server. Text Send is free; file Send needs Premium. Files can be up to 25 MB.</p>
+<p>If someone sent you a link, open it, enter the password if there is one, and view or download the content.</p></section>
+
+<section id="attachments"><h2>Attachments</h2>
+<p>With Premium you can attach files to items, up to 25 MB per file and 1 GB in total. Attachments are encrypted with the item. Very old attachments made without an item key show <b>Fix</b> in the item; fixing re-encrypts them with the item key.</p></section>
+
+<section id="reports"><h2>Reports</h2>
+<p><b>Data breach report</b> (free): checks your account email against known breaches. The lookup goes through our server to XposedOrNot, a free breach database; only the email address is sent.</p>
+<p><b>Exposed passwords</b> checks your passwords against Have I Been Pwned with k-anonymity: only the first five characters of each password's SHA-1 hash leave your device. <b>Reused</b>, <b>weak</b>, <b>unsecured websites</b> and <b>inactive two-step login</b> reports run on your device. Password health reports need Premium.</p>
+<p>The browser extension can warn before you open a known phishing site, using a public list of phishing domains.</p></section>
+
+<section id="encryption"><h2>Encryption and keys</h2>
+<p>Your master password is stretched with PBKDF2-SHA256 (600,000 iterations by default) or Argon2id into a key that never leaves your device. Change the algorithm under <b>Settings › Security › Keys</b>. Changing it logs out your other sessions.</p>
+<p>The <b>fingerprint phrase</b> (Settings › My account) is a sequence of words derived from your public key. Compare it when another device asks to approve a sign-in.</p>
+<p><b>Rotating your account encryption key</b> re-encrypts every item with a new key. Do it if you think your key was exposed; then log in again on every device.</p></section>
+
+<section id="icons"><h2>Website icons</h2>
+<p>Item icons are fetched through pass.azet.io, so the websites do not see your IP address. Turn them off under <b>Settings › Appearance › Show website icons</b>.</p></section>
+
+<section id="server"><h2>Server</h2>
+<p>AZET Pass has one region: pass.azet.io, on Cloudflare Workers with a D1 database. It holds your email, a hash of your master password hash, the encrypted vault and, if you add one, your license key. Our server code is open source (MIT) on <a href="https://github.com/neulketing/azet-pass">GitHub</a>. The apps also let you enter your own self-hosted server address.</p></section>
+
+<section id="browser"><h2>Browser requirements</h2>
+<p>The web vault needs a current browser with WebAssembly enabled: Chrome, Edge, Firefox, Safari or another up-to-date browser. Some locked-down or very old browsers turn WebAssembly off; enable it or use another browser.</p></section>
+
+<section id="not-included"><h2>Not included</h2>
+<p>AZET Pass is for individuals. These Bitwarden features are not part of AZET Pass, so the apps do not show them: organizations, sharing and collections, Families, emergency access, Secrets Manager, single sign-on (SSO), signing in with a passkey, and two-step login by email, Duo, YubiKey or security key. Use the authenticator app for two-step login.</p></section>
+
+<section id="contact"><h2>Contact</h2>
+<p>Email <a href="mailto:hello@azet.io">hello@azet.io</a>. Never send us your master password or recovery code: we will never ask for them.</p></section>
+<footer>AZET Pass, AZET LLC · <a href="https://azet.io/terms">Terms</a> · <a href="https://azet.io/privacy#pass">Privacy</a> · <a href="https://azet.io/products/pass">Product page</a></footer>
+</main></div>
+</body></html>

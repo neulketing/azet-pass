@@ -51,7 +51,8 @@ pub async fn config(
             "disableUserRegistration": disable_user_registration,
             // When enabled, this setting signals to clients that onboarding interstitials
             // (post-login welcome dialogs, extension install prompts, setup extension redirects, and premium upsell modals) should be suppressed
-            "suppressOnboardingInterstitials": false,
+            // AZET: true — the extension install prompts point at store listings we do not have yet (lane 98 #12)
+            "suppressOnboardingInterstitials": true,
         },
         "environment": {
           "vault": domain,

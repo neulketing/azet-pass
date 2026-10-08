@@ -1,3 +1,4 @@
+use crate::auth::Claims;
 use axum::Json;
 use serde_json::{json, Value};
 
@@ -10,7 +11,7 @@ use serde_json::{json, Value};
 /// In vaultwarden, when `emergency_access_allowed` is disabled, it returns an empty list.
 /// We follow the same pattern here.
 #[worker::send]
-pub async fn get_trusted_contacts() -> Json<Value> {
+pub async fn get_trusted_contacts(_claims: Claims) -> Json<Value> {
     Json(json!({
         "data": [],
         "object": "list",
@@ -23,7 +24,7 @@ pub async fn get_trusted_contacts() -> Json<Value> {
 /// Returns the list of emergency access grants where the current user is a grantee.
 /// This is a stub implementation that always returns an empty list.
 #[worker::send]
-pub async fn get_granted_access() -> Json<Value> {
+pub async fn get_granted_access(_claims: Claims) -> Json<Value> {
     Json(json!({
         "data": [],
         "object": "list",

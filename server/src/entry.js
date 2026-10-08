@@ -8,7 +8,7 @@
  */
 
 import RustWorker from "../build/index.js";
-import { signupGate } from "./signup.js";
+import { signupGate, sendPlainMail } from "./signup.js";
 
 function base64UrlDecode(str) {
   let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
@@ -120,6 +120,20 @@ function shouldOffloadToHeavyDo(request, url) {
   return methods.has(method);
 }
 
+function finishMailResponse(response, env, ctx) {
+  const encoded = response.headers.get("x-azet-mail");
+  if (!encoded) return response;
+  const headers = new Headers(response.headers);
+  headers.delete("x-azet-mail");
+  try {
+    const message = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0))));
+    if (typeof message.to === "string" && typeof message.subject === "string" && typeof message.text === "string") {
+      ctx.waitUntil(sendPlainMail(env, message).catch((error) => console.error("azet-mail", String(error))));
+    }
+  } catch (error) { console.error("azet-mail-decode", String(error)); }
+  return new Response(response.body, {status: response.status, statusText: response.statusText, headers});
+}
+
 // Main fetch handler
 export default {
   async fetch(request, env, ctx) {
@@ -163,20 +177,20 @@ export default {
           const name = shardKey ? `user:${shardKey}` : "user:default";
           const id = env.HEAVY_DO.idFromName(name);
           const stub = env.HEAVY_DO.get(id);
-          return stub.fetch(request, { body });
+          return finishMailResponse(await stub.fetch(request, { body }), env, ctx);
         }
       } else if (shouldOffloadToHeavyDo(request, url)) {
         const shardKey = await getHeavyDoShardKey(request, url);
         const name = shardKey ? `user:${shardKey}` : "user:default";
         const id = env.HEAVY_DO.idFromName(name);
         const stub = env.HEAVY_DO.get(id);
-        return stub.fetch(request);
+        return finishMailResponse(await stub.fetch(request), env, ctx);
       }
     }
 
     // Pass all other requests to Rust WASM (streaming routes are intercepted in Rust)
     const worker = new RustWorker(ctx, env);
-    return worker.fetch(request);
+    return finishMailResponse(await worker.fetch(request), env, ctx);
   },
 
   async scheduled(event, env, ctx) {

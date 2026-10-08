@@ -88,6 +88,7 @@ where
 pub struct TokenRequest {
     grant_type: String,
     username: Option<String>,
+    client_secret: Option<String>,
     password: Option<String>, // masterPasswordHash or auth request access code
     refresh_token: Option<String>,
     #[serde(rename = "client_id", alias = "clientId")]
@@ -588,6 +589,57 @@ pub async fn token(
     let db = db::get_db(&env)?;
 
     match payload.grant_type.as_str() {
+        "client_credentials" => {
+            let client_id = required_field(payload.client_id.as_deref(), "client_id")?;
+            let user_id = client_id
+                .strip_prefix("user.")
+                .ok_or_else(|| AppError::BadRequest("invalid_client".into()))?;
+            if uuid::Uuid::parse_str(user_id).is_err() || payload.scope.as_deref() != Some("api") {
+                return Err(AppError::BadRequest("invalid_client".into()));
+            }
+            enforce_ip_rate_limit(
+                env.as_ref(),
+                &headers,
+                "LOGIN_RATE_LIMITER",
+                "api-key-login",
+                "Too many login attempts",
+            )
+            .await?;
+            let secret = required_field(payload.client_secret.as_deref(), "client_secret")?;
+            let key: Option<String> = db
+                .prepare("SELECT api_key FROM users WHERE id = ?1")
+                .bind(&[user_id.into()])?
+                .first(Some("api_key"))
+                .await
+                .map_err(|_| AppError::Database)?;
+            if !key
+                .as_ref()
+                .is_some_and(|key| constant_time_eq(key.as_bytes(), secret.as_bytes()))
+            {
+                return Err(AppError::Unauthorized("invalid_client".into()));
+            }
+            let user = load_user_by_id(&db, user_id).await?;
+            let device_request = DeviceAuthRequest {
+                client_id: client_id.clone(),
+                identifier: required_field(
+                    payload.device_identifier.as_deref(),
+                    "device_identifier",
+                )?,
+                name: required_field(payload.device_name.as_deref(), "device_name")?,
+                r#type: parse_required_device_type(payload.device_type.as_deref(), "device_type")?,
+            };
+            let device = Device::get_or_create(
+                &db,
+                device_request.identifier,
+                user.id.clone(),
+                device_request.name,
+                device_request.r#type,
+            )
+            .await?;
+            let premium = crate::handlers::azet::premium_for(&env, &user.id).await;
+            generate_tokens_and_response(user, &device, &client_id, &env, None, premium)
+                .map(IntoResponse::into_response)
+        }
         "password" => {
             let username = required_field(payload.username.as_deref(), "username")?;
 

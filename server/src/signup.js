@@ -101,7 +101,13 @@ async function sendMail(env, to, link) {
   const html = `<div style="font:15px/1.6 -apple-system,Segoe UI,sans-serif;color:#0d0d0d;max-width:560px">${lines
     .map((l) => `<p style="margin:0 0 10px">${l}</p>`)
     .join("")}<p style="margin:18px 0"><a href="${link.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" style="background:#175ddc;color:#fff;text-decoration:none;padding:10px 18px;border-radius:999px;font-weight:600">Finish creating your account</a></p><div style="color:#5d5d5d;font-size:13px;border-top:1px solid #e5e5e5;margin-top:20px;padding-top:12px">${foot}<br>AZET Pass, AZET LLC</div></div>`;
-  const msg = { from: { email: env.MAIL_FROM || "pass@azet.io", name: "AZET Pass" }, to, subject: "Confirm your email for AZET Pass", text, html };
-  if (env.MAIL_WEBHOOK) await fetch(env.MAIL_WEBHOOK, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(msg) });
-  else await env.EMAIL.send(msg);
+  await sendPlainMail(env, { to, subject: "Confirm your email for AZET Pass", text, html });
+}
+
+export async function sendPlainMail(env, {to, subject, text, html}) {
+  const msg = { from: { email: env.MAIL_FROM || "pass@azet.io", name: "AZET Pass" }, to, subject, text, ...(html ? {html} : {}) };
+  if (env.MAIL_WEBHOOK) {
+    const response = await fetch(env.MAIL_WEBHOOK, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(msg)});
+    if (!response.ok) throw new Error(`Mail webhook HTTP ${response.status}`);
+  } else await env.EMAIL.send(msg);
 }

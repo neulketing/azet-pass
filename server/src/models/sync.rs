@@ -36,7 +36,11 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub fn from_user(user: User, two_factor_enabled: bool, premium: bool) -> Result<Self, AppError> {
+    pub fn from_user(
+        user: User,
+        two_factor_enabled: bool,
+        premium: bool,
+    ) -> Result<Self, AppError> {
         let creation_date = chrono::DateTime::parse_from_rfc3339(&user.created_at)
             .map_err(|_| AppError::Internal)?
             .to_rfc3339_opts(SecondsFormat::Micros, true);

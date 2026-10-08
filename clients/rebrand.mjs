@@ -294,6 +294,13 @@ swap(E + 'billing/popup/services/browser-premium-upgrade-prompt.service.ts', [['
 swap(E + 'tools/popup/settings/settings-v2.component.html', [[/\s*@if \(!\(hasPremium\$ \| async\)\) \{\s*<bit-callout \[icon\]="null">\s*\{\{ "unlockFeaturesWithPremium" \| i18n \}\}[\s\S]*?<\/bit-callout>\s*\}/, '']])
 swap(E + 'billing/popup/settings/premium-v2.component.html', [[/\s*<p class="tw-mt-5 tw-mb-0">\{\{ priceString \}\}<\/p>/, ''], [/\s*<button\s+bitButton\s+type="submit"\s+buttonType="primary"\s+\(click\)="purchase\(\)"[\s\S]*?<\/button>/, '']])
 
+// typed addresses of screens we removed from the UI (Secrets Manager ads, new organization, add plan) go to the vault
+swap(W + 'oss-routing.module.ts', [
+  ['        component: SMLandingComponent,\n        data: { titleId: "moreProductsFromBitwarden" },', '        redirectTo: "/vault",'],
+  ['        component: RequestSMAccessComponent,\n        data: { titleId: "requestAccessToSecretsManager" },', '        redirectTo: "/vault",'],
+  ['        component: CreateOrganizationComponent,\n        canActivate: [addPlanRedirectGuard],\n        data: { titleId: "newOrganization" } satisfies RouteDataProperties,', '        redirectTo: "/vault",'],
+  ['            component: CreateOrganizationComponent,\n            data: { titleId: "addPlan" } satisfies RouteDataProperties,', '            redirectTo: "/vault",']])
+
 // desktop help menu (#39): no Bitwarden social accounts, mobile or extension store submenus; bug reports to our repo
 swap('apps/desktop/src/main/menu/menu.help.ts', [['      this.separator,\n      this.followUs,\n', ''],
   ['      this.separator,\n      this.getMobileApp,\n      this.getBrowserExtension,\n', ''],

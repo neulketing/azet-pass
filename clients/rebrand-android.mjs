@@ -42,8 +42,8 @@ edit('app/build.gradle.kts', (s) => s.replace(`    packaging {
             useLegacyPackaging = true
         }
         resources {`).replace(/(\n        versionName = libs\.versions\.appVersionName\.get\(\)\n)/, '$1        ndk { abiFilters += listOf("arm64-v8a") }\n'))
-// our own version line: upstream 2026.9.1 + AZET build 3 (ready-zero) (versionCode grows with each AZET release)
-edit('gradle/libs.versions.toml', (s) => s.replace(/appVersionCode = "\d+"/, 'appVersionCode = "20260903"').replace(/appVersionName = "[^"]+"/, 'appVersionName = "2026.9.1-azet3"'))
+// our own version line: upstream 2026.9.1 + AZET build 4 (ready-zero) (versionCode grows with each AZET release)
+edit('gradle/libs.versions.toml', (s) => s.replace(/appVersionCode = "\d+"/, 'appVersionCode = "20260904"').replace(/appVersionName = "[^"]+"/, 'appVersionName = "2026.9.1-azet4"'))
 // GPL-3.0 source offer on the About screen's copyright line
 edit('app/src/main/kotlin/com/x8bit/bitwarden/ui/platform/feature/settings/about/AboutViewModel.kt', (s) =>
   s.replace('copyrightInfo = "© Bitwarden Inc. 2015-${Year.now(clock).value}".asText(),', 'copyrightInfo = "© Bitwarden Inc. 2015-${Year.now(clock).value}, AZET LLC. GPL-3.0, source: github.com/neulketing/azet-pass".asText(),'))
@@ -64,9 +64,9 @@ for (const mod of ['app', 'ui', 'core', 'data', 'network', 'cxf', 'authenticator
   for (const f of walk(p(mod)).filter((f) => /\/res\/values[^/]*\/strings[^/]*\.xml$/.test(f))) {
     const ko = /values-ko/.test(f)
     const s = fs.readFileSync(f, 'utf8')
-    const out = s.replace(/>([^<]*Bitwarden[^<]*)</g, (m, t) => {
+    const out = s.replace(/>([^<]*[Bb][Ii]t[Ww]arden[^<]*)</g, (m, t) => {
       renamed++
-      let v = t.replaceAll('Bitwarden', 'AZET Pass')
+      let v = t.replace(/[Bb][Ii]t[Ww]arden(?!\.[a-z])/g, 'AZET Pass') // any casing (lane 151: "bitwarden auto-fill service", "BitWarden"); domains are handled below
       if (ko) v = v.replace(/AZET Pass(은|을|과|으로|이 )/g, (_, x) => 'AZET Pass' + { '은': '는', '을': '를', '과': '와', '으로': '로', '이 ': '가 ' }[x])
       return `>${v}<`
     }).replace(/>([^<]*bitwarden\.com[^<]*)</g, (m, t) => `>${t // domains in sentences (lane 98): our pages

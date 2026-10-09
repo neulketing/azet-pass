@@ -68,6 +68,7 @@ const OVR = {
   individualUpgradeDescriptionMessage: ['Premium adds file attachments, file Send, password health reports and archive to your account.', 'Premium은 계정에 첨부 파일, 파일 Send, 비밀번호 점검 보고서, 보관 기능을 더합니다.'],
   alreadyHaveSubscriptionSelfHostedMessage: ['Enter your AZET Pass license key to add Premium to this account.', 'AZET Pass 라이선스 키를 입력하면 이 계정에 Premium이 추가됩니다.'],
   alreadyHaveSubscriptionSelfHostedMessageV3: ['Enter your AZET Pass license key to add Premium to this account.', 'AZET Pass 라이선스 키를 입력하면 이 계정에 Premium이 추가됩니다.'],
+  twoStepLoginConfirmation: ['Two-step login asks for a code from your authenticator app when you log in. It is set up in the AZET Pass web vault. Do you want to open the web vault now?', '2단계 로그인은 로그인할 때 인증 앱의 코드를 한 번 더 확인합니다. AZET Pass 웹 보관함에서 설정합니다. 지금 웹 보관함을 열까요?'],
   continueToHelpCenterDesc: ['Learn more about using AZET Pass on the help page.', '도움말 페이지에서 AZET Pass 사용법을 더 알아보세요.'],
 }
 // new keys for the Premium benefits our server really gives (web vault Premium page)
@@ -88,8 +89,9 @@ for (const dir of tables.map((d) => p(d)).filter(fs.existsSync)) {
         if (j[k] && en[k] && j[k].message.replaceAll('Bitwarden', 'AZET Pass') === en[k].message) j[k].message = v
     }
     for (const v of Object.values(j)) {
-      if (typeof v?.message === 'string' && v.message.includes('Bitwarden')) {
-        v.message = v.message.replaceAll('Bitwarden', 'AZET Pass')
+      if (typeof v?.message === 'string' && /[Bb]itwarden/.test(v.message)) {
+        // lower-case leftovers too (lane 151): "the bitwarden.com web vault", "emails bitwarden sends"
+        v.message = v.message.replaceAll('Bitwarden', 'AZET Pass').replaceAll('bitwarden.com', 'pass.azet.io').replaceAll('bitwarden', 'AZET Pass')
         // Korean particles: 비트워든 ends in a consonant, 패스 in a vowel
         if (ko) v.message = v.message.replace(/AZET Pass(은|을|과|으로|이 )/g, (m, x) => 'AZET Pass' + { '은': '는', '을': '를', '과': '와', '으로': '로', '이 ': '가 ' }[x])
         renamed++
@@ -294,6 +296,21 @@ swap(E + 'billing/popup/services/browser-premium-upgrade-prompt.service.ts', [['
 swap(E + 'tools/popup/settings/settings-v2.component.html', [[/\s*@if \(!\(hasPremium\$ \| async\)\) \{\s*<bit-callout \[icon\]="null">\s*\{\{ "unlockFeaturesWithPremium" \| i18n \}\}[\s\S]*?<\/bit-callout>\s*\}/, '']])
 swap(E + 'billing/popup/settings/premium-v2.component.html', [[/\s*<p class="tw-mt-5 tw-mb-0">\{\{ priceString \}\}<\/p>/, ''], [/\s*<button\s+bitButton\s+type="submit"\s+buttonType="primary"\s+\(click\)="purchase\(\)"[\s\S]*?<\/button>/, '']])
 
+// Lane 151 (live sweep 10-10): what a free account could still press or read
+// Premium badge said "Upgrade" (nothing to buy yet; the click already opens the Premium notice)
+swap('libs/angular/src/billing/components/premium-badge/premium-badge.component.ts', [[`[label]="'upgrade' | i18n"`, `[label]="'premium' | i18n"`]])
+// the public Send page named the product "Bitwarden Send"
+swap(W + 'tools/send/send-access/send-access-explainer.component.html', [['>Bitwarden Send</a', '>AZET Pass Send</a']])
+// new-account checklist: "Install extension" led to a page that says the extension is in no store yet
+swap(W + 'vault/individual-vault/vault-onboarding/vault-onboarding.component.html', [[/\n\s*<app-onboarding-task\s*\[title\]="'onboardingInstallTheBrowserExtensionTitle' \| i18n"[\s\S]*?<\/app-onboarding-task>/, '']])
+swap(W + 'vault/individual-vault/vault-onboarding/vault-onboarding.component.ts', [['        installExtension: false,', '        installExtension: true, // AZET: no store listing yet, so no extension step']])
+// typed addresses of screens with no server side (passkey and SSO login, emergency access, Families sponsorship, extension set-up)
+swap(W + 'oss-routing.module.ts', [['const routes: Routes = [\n', 'const routes: Routes = [\n' +
+  ['login-with-passkey', 'sso'].map((x) => `  { path: "${x}", redirectTo: "/login" },\n`).join('') +
+  ['settings/emergency-access', 'settings/sponsored-families', 'setup-extension', 'browser-extension-prompt'].map((x) => `  { path: "${x}", redirectTo: "/vault" },\n`).join('')]])
+
+swap(W + 'vault/guards/setup-extension-redirect.guard.ts', [['  return router.createUrlTree(["/setup-extension"]);', '  return true; // AZET: that screen is gone (its typed address goes to the vault)']])
+
 // typed addresses of screens we removed from the UI (Secrets Manager ads, new organization, add plan) go to the vault
 swap(W + 'oss-routing.module.ts', [
   ['        component: SMLandingComponent,\n        data: { titleId: "moreProductsFromBitwarden" },', '        redirectTo: "/vault",'],
@@ -305,6 +322,10 @@ swap(W + 'oss-routing.module.ts', [
 swap('apps/desktop/src/main/menu/menu.help.ts', [['      this.separator,\n      this.followUs,\n', ''],
   ['      this.separator,\n      this.getMobileApp,\n      this.getBrowserExtension,\n', ''],
   ['"https://github.com/bitwarden/clients/issues"', `"${SRC}/issues"`]])
+
+// #40 "Check for updates": there is no desktop update feed (pass.azet.io/desktop/latest*.yml is 404 until the apps are signed)
+swap('apps/desktop/src/main/menu/menu.about.ts', [['return [this.separator, this.checkForUpdates, this.aboutBitwarden];', 'return [this.separator, this.aboutBitwarden];']])
+swap('apps/desktop/src/main/menu/menu.bitwarden.ts', [['const items = [this.aboutBitwarden, this.checkForUpdates];', 'const items = [this.aboutBitwarden];']])
 
 // #12 #15 #21 #22 #24 #29: every Bitwarden page, store listing and help link in shipped code -> ours. Callbacks
 // (webauthn/duo/connector), images and test fixtures stay; assets.bitwarden.com (phishing list) and github are not touched.
@@ -329,7 +350,7 @@ const mapBw = (url) => {
   return PRODUCT
 }
 const BW_URL = /https?:\/\/(?:www\.)?bitwarden\.com(?![\w.-])(?:\/[^"'`\s)<>,]*)?/g
-const STORE_URL = /https:\/\/(?:chromewebstore\.google\.com|chrome\.google\.com\/webstore)\/detail\/[\w-]+\/nngceckbapebfimnlniiiahkandclblb[^"'`\s)<>]*|https:\/\/addons\.mozilla\.org\/[\w-]+\/firefox\/addon\/bitwarden-password-manager\/[^"'`\s)<>]*|https:\/\/apps\.apple\.com\/[\w/-]*\/app\/bitwarden[\w-]*\/id\d+[^"'`\s)<>]*|https:\/\/addons\.opera\.com\/[\w/-]*bitwarden-free-password-manager\/[^"'`\s)<>]*|https:\/\/microsoftedge\.microsoft\.com\/addons\/detail\/jbkfoedolllekgbhcbcoahefnbanhhlh|https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.(?:x8bit\.bitwarden|bitwarden\.authenticator)/g
+const STORE_URL = /https:\/\/(?:chromewebstore\.google\.com|chrome\.google\.com\/webstore)\/detail\/[\w-]+\/nngceckbapebfimnlniiiahkandclblb[^"'`\s)<>]*|https:\/\/addons\.mozilla\.org\/[\w-]+\/firefox\/addon\/bitwarden-password-manager\/[^"'`\s)<>]*|https:\/\/apps\.apple\.com\/(?:[\w/-]*\/)?app\/bitwarden[\w-]*\/id\d+[^"'`\s)<>]*|https:\/\/addons\.opera\.com\/[\w/-]*bitwarden-free-password-manager\/[^"'`\s)<>]*|https:\/\/microsoftedge\.microsoft\.com\/addons\/detail\/jbkfoedolllekgbhcbcoahefnbanhhlh|https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.(?:x8bit\.bitwarden|bitwarden\.authenticator)/g
 let relinked = 0
 const walkSrc = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
   e.name === 'node_modules' || e.name.startsWith('.') ? [] : e.isDirectory() ? walkSrc(path.join(d, e.name)) : [path.join(d, e.name)])

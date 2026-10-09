@@ -69,36 +69,6 @@ async fn xon_get(path: &str, cache_ttl: Option<i32>) -> Result<(u16, Value), App
     Ok((status, body))
 }
 
-/// The XposedOrNot breach catalogue (~650 KB), kept in the Workers cache for a day.
-async fn breach_catalog() -> Vec<Value> {
-    use worker::{Cache, Headers, Response};
-    const KEY: &str = "https://pass.azet.io/__cache/xon-breaches";
-    let cache = Cache::default();
-    if let Ok(Some(mut hit)) = cache.get(KEY, false).await {
-        if let Ok(v) = hit.json::<Value>().await {
-            return v.as_array().cloned().unwrap_or_default();
-        }
-    }
-    for _ in 0..2 {
-        if let Ok((200, body)) = xon_get("/breaches", Some(86400)).await {
-            let list = body["exposedBreaches"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
-            if !list.is_empty() {
-                let headers = Headers::new();
-                let _ = headers.set("Cache-Control", "max-age=86400");
-                let _ = headers.set("Content-Type", "application/json");
-                if let Ok(r) = Response::ok(Value::Array(list.clone()).to_string()) {
-                    let _ = cache.put(KEY, r.with_headers(headers)).await;
-                }
-                return list;
-            }
-        }
-    }
-    vec![]
-}
-
 /// GET /api/hibp/breach?username=...
 ///
 /// AZET: the web vault's free "Data breach report". HIBP's account search needs a paid key, so the lookup goes to
@@ -120,54 +90,49 @@ pub async fn hibp_breach(
             _ => format!("%{b:02X}"),
         })
         .collect();
-    // shared Cloudflare egress IPs get throttled now and then: up to three tries, 0.8 s apart
-    let mut res = xon_get(&format!("/check-email/{enc}"), None).await;
+    // One call that carries each breach's details (lane 151: the separate catalogue fetch kept failing on the Worker,
+    // so every breach showed no date, no description and "0" accounts). Shared Cloudflare egress IPs get throttled
+    // now and then: up to three tries, 0.8 s apart.
+    let path = format!("/breach-analytics?email={enc}");
+    let mut res = xon_get(&path, None).await;
     for _ in 0..2 {
         if matches!(res, Ok((200 | 404, _))) {
             break;
         }
         worker::Delay::from(std::time::Duration::from_millis(800)).await;
-        res = xon_get(&format!("/check-email/{enc}"), None).await;
+        res = xon_get(&path, None).await;
     }
     let (status, found) = res?;
     if status == 404 {
         return Ok(Json(json!([])));
     }
-    if status != 200 {
+    if status != 200 || !found.is_object() {
         return Err(AppError::BadRequest(format!(
             "The breach database did not answer (HTTP {status}). Try again in a minute."
         )));
     }
-    let names: Vec<&str> = found["breaches"]
+    // "ExposedBreaches": null = this address is in no known breach
+    let out: Vec<Value> = found["ExposedBreaches"]["breaches_details"]
         .as_array()
-        .and_then(|a| a.first())
-        .and_then(|a| a.as_array())
-        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
-        .unwrap_or_default();
-    let all = breach_catalog().await;
-    let out: Vec<Value> = names
+        .cloned()
+        .unwrap_or_default()
         .iter()
-        .map(|name| {
-            let d = all
-                .iter()
-                .find(|b| b["breachID"].as_str() == Some(name))
-                .cloned()
-                .unwrap_or(Value::Null);
-            let day = |k: &str| d[k].as_str().map(|s| s.get(..10).unwrap_or(s).to_string());
+        .map(|d| {
+            let s = |k: &str| d[k].as_str().unwrap_or("");
             json!({
-                "Name": name,
-                "Title": name,
-                "Domain": d["domain"].as_str().unwrap_or(""),
-                "BreachDate": day("breachedDate"),
-                "AddedDate": d["addedDate"],
-                "ModifiedDate": d["addedDate"],
-                "PwnCount": d["exposedRecords"].as_i64().unwrap_or(0),
-                "Description": d["exposureDescription"].as_str().unwrap_or(""),
-                "LogoPath": d["logo"].as_str().unwrap_or(""),
-                "DataClasses": d["exposedData"].as_array().cloned().unwrap_or_default(),
-                "IsVerified": d["verified"].as_bool().unwrap_or(false),
+                "Name": s("breach"),
+                "Title": s("breach"),
+                "Domain": s("domain"),
+                "BreachDate": Value::Null, // upstream gives the year only; the description says when
+                "AddedDate": d["added"],
+                "ModifiedDate": d["added"],
+                "PwnCount": d["xposed_records"].as_i64().or_else(|| s("xposed_records").parse().ok()).unwrap_or(0),
+                "Description": s("details"),
+                "LogoPath": s("logo"),
+                "DataClasses": s("xposed_data").split(';').filter(|x| !x.is_empty()).collect::<Vec<_>>(),
+                "IsVerified": s("verified") == "Yes",
                 "IsFabricated": false,
-                "IsSensitive": d["sensitive"].as_bool().unwrap_or(false),
+                "IsSensitive": false,
                 "IsRetired": false,
                 "IsSpamList": false,
             })
